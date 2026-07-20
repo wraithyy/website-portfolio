@@ -1,0 +1,39 @@
+# Josef Kvapil
+
+> Frontend architect and team lead in Prague, Czech Republic. Architects React
+> and TypeScript platforms for banking, energy and insurance at Trask; builds
+> open-source tooling that keeps frontend code honest. AI-assisted development
+> practitioner since the GitHub Copilot closed beta — enthusiastic precisely
+> because he knows its limits.
+
+The site is one page in two languages: https://jkvapil.cz (English) and
+https://jkvapil.cz/cs/ (Czech). Its hero narrates six steps of frontend craft
+on a single button: architecture, TypeScript contracts, design systems,
+accessibility, review & AI leverage, delivery.
+
+## Capabilities
+
+- Platform & microfrontend architecture: shells, federated modules, typed
+  seams; architected a core-system rebuild for a major insurance group with a
+  framework used daily by dozens of developers
+- Leading frontend teams: review culture, mentoring, the same quality bar for
+  everyone
+- Delivery in regulated industries: banking, insurance, energy — KYC flows,
+  e-signing, SAP-integrated portals
+- Analysis & client communication: requirements, target architecture,
+  functional specifications, man-day estimates
+- AI-first development, human-verified: own agent tooling, internal talks,
+  against pure vibecoding
+
+## Open source
+
+- [biome-you-might-not-need-an-effect](https://github.com/wraithyy/biome-you-might-not-need-an-effect): Biome linter plugin detecting unnecessary React useEffect hooks
+- [construe](https://github.com/wraithyy/construe): natural language to validated structured output, React-first
+- [companion](https://github.com/wraithyy/companion): desktop app reacting to Claude Code activity via hooks
+- [openclaw-guardian](https://github.com/wraithyy/openclaw-guardian): rate-limit-aware proxy and session healer for the Claude API
+
+## Contact
+
+- Email: josef0kvapil@gmail.com
+- GitHub: https://github.com/wraithyy
+- LinkedIn: https://www.linkedin.com/in/josef-kvapil
