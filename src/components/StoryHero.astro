@@ -1,0 +1,525 @@
+---
+import { storySteps } from '../data/story';
+import { type Lang, useTranslations } from '../i18n/ui';
+
+interface Props {
+  lang: Lang;
+}
+
+const { lang } = Astro.props;
+const t = useTranslations(lang);
+---
+
+<div class="mx-auto max-w-6xl px-(--spacing-gutter)">
+  <section class="pt-14 pb-10 lg:pb-14">
+    <p class="rise label-mono text-accent">{t('story.kicker')}</p>
+    <div class="overflow-hidden">
+      <h1 class="rise rise-2 mt-5 max-w-3xl font-display text-display text-balance">
+        {t('story.headline')}
+      </h1>
+    </div>
+    <p class="rise rise-3 mt-8 max-w-lg text-lg leading-relaxed text-muted">{t('story.intro')}</p>
+  </section>
+
+  <div class="grid lg:grid-cols-2 lg:gap-16">
+    <!-- Sticky stage -->
+    <div
+      class="sticky top-0 z-10 -mx-(--spacing-gutter) border-b border-hairline bg-paper px-(--spacing-gutter) lg:static lg:mx-0 lg:border-b-0 lg:bg-transparent lg:px-0"
+    >
+      <div
+        id="stage"
+        data-stage="1"
+        class="sticky top-0 flex min-h-56 flex-col items-center justify-center py-8 lg:top-[33vh] lg:min-h-72 lg:py-0"
+      >
+        <div class="btn-slot relative grid place-items-center">
+          <!-- Living blueprint: drafting annotations that redraw per stage and clean up on ship -->
+          <svg
+            class="blueprint pointer-events-none absolute"
+            width="380"
+            height="230"
+            viewBox="0 0 380 230"
+            fill="none"
+            aria-hidden="true"
+            style="left:50%;top:50%;transform:translate(-50%,-50%)"
+          >
+            <!-- crop marks at button corners (button box: 94,93 → 286,137) -->
+            <g class="bp bp-marks" stroke="var(--muted)" stroke-width="1">
+              <path pathlength="1" class="guide" d="M86 93 H 76 M94 85 V 75"></path>
+              <path pathlength="1" class="guide" d="M294 93 H 304 M286 85 V 75"></path>
+              <path pathlength="1" class="guide" d="M86 137 H 76 M94 145 V 155"></path>
+              <path pathlength="1" class="guide" d="M294 137 H 304 M286 145 V 155"></path>
+            </g>
+
+            <!-- s1: bounding-box dimensions -->
+            <g class="bp bp-1" stroke="var(--accent)" stroke-width="1">
+              <path pathlength="1" class="guide" d="M94 70 V 48 M286 70 V 48"></path>
+              <path pathlength="1" class="guide" d="M94 53 H 286"></path>
+              <path pathlength="1" class="guide" d="M94 53 l6 -3 m-6 3 l6 3 M286 53 l-6 -3 m6 3 l-6 3"></path>
+              <path pathlength="1" class="guide" d="M314 93 H 324 M314 137 H 324"></path>
+              <path pathlength="1" class="guide" d="M319 93 V 137"></path>
+            </g>
+            <text class="bp bp-1 bp-label" x="190" y="42" text-anchor="middle">12rem</text>
+            <text class="bp bp-1 bp-label" x="330" y="118">2.75rem</text>
+
+            <!-- s2: typed props callout -->
+            <g class="bp bp-2" stroke="var(--accent)" stroke-width="1">
+              <path pathlength="1" class="guide" d="M286 93 L 316 55 H 372"></path>
+            </g>
+            <text class="bp bp-2 bp-label" x="318" y="47">ButtonProps</text>
+
+            <!-- s3: easing curve -->
+            <g class="bp bp-3" stroke-width="1">
+              <path pathlength="1" class="guide" stroke="var(--muted)" d="M18 40 V 104 H 74"></path>
+              <path pathlength="1" class="guide" stroke="var(--accent)" d="M18 104 C 27 104 32 42 74 42"></path>
+            </g>
+            <text class="bp bp-3 bp-label" x="18" y="122">400ms ease</text>
+
+            <!-- s4: focus ring + offset dimension -->
+            <g class="bp bp-4" stroke="var(--accent)" stroke-width="1">
+              <path pathlength="1" class="guide" d="M62 89 H 88 M62 97 H 88 M62 89 V 97"></path>
+            </g>
+            <text class="bp bp-4 bp-label" x="16" y="97">3px</text>
+
+            <!-- s5: review bracket -->
+            <g class="bp bp-5" stroke="var(--accent)" stroke-width="1">
+              <path pathlength="1" class="guide" d="M78 70 H 70 V 160 H 78 M302 70 H 310 V 160 H 302"></path>
+            </g>
+          </svg>
+          <button class="btn demo-btn" type="button" tabindex="-1" aria-hidden="true">
+            <span class="lbl lbl-sketch normal-case">{t('story.btnSketch')}</span>
+            <span class="lbl lbl-real">{t('story.btnReal')}</span>
+          </button>
+          <a class="btn real-btn" href="mailto:josef0kvapil@gmail.com">{t('story.btnReal')}</a>
+          <span class="ghost-cursor" aria-hidden="true">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="var(--ink)" stroke="var(--paper)" stroke-width="1.5">
+              <path d="M5 3l14 8-6.5 1.5L9 19z"></path>
+            </svg>
+          </span>
+        </div>
+
+        <div class="readout label-mono mt-6 grid text-muted" aria-hidden="true">
+          {storySteps.map((step, i) => <span class={`ro ro-${i + 1}`}>{step.note[lang]}</span>)}
+        </div>
+      </div>
+    </div>
+
+    <!-- Scroll steps -->
+    <div>
+      {
+        storySteps.map((step, i) => (
+          <section
+            data-step={i + 1}
+            class={`flex min-h-[44vh] flex-col justify-center py-10 ${i < storySteps.length - 1 ? 'border-b border-hairline' : ''}`}
+          >
+            <p class="label-mono text-accent">{step.label[lang]}</p>
+            <h2 class="mt-4 font-display text-title">{step.title[lang]}</h2>
+            <p class="mt-5 max-w-md leading-relaxed text-muted">{step.body[lang]}</p>
+            <dl class="label-mono mt-6 max-w-md space-y-1.5 border-l border-hairline pl-4 normal-case">
+              <div class="grid grid-cols-[6.5rem_minmax(0,1fr)] gap-2">
+                <dt class="text-accent">{lang === 'cs' ? 'tlačítko →' : 'button →'}</dt>
+                <dd class="text-muted">{step.onButton[lang]}</dd>
+              </div>
+              <div class="grid grid-cols-[6.5rem_minmax(0,1fr)] gap-2">
+                <dt class="text-accent">{lang === 'cs' ? 'platforma →' : 'platform →'}</dt>
+                <dd class="text-muted">{step.onPlatform[lang]}</dd>
+              </div>
+            </dl>
+          </section>
+        ))
+      }
+    </div>
+  </div>
+
+  <div id="story-bridge" class="border-t border-hairline py-16 text-center">
+    <p class="font-display text-title text-balance">{t('story.bridge')}</p>
+    <p class="label-mono mt-6 text-muted">{t('story.bridgeMeta')}</p>
+  </div>
+</div>
+
+<!-- The shipped button stays deployed: follows the visitor after the story ends -->
+<a id="floating-cta" href="mailto:josef0kvapil@gmail.com" class="label-mono" aria-hidden="true" tabindex="-1">
+  {t('story.btnReal')}
+</a>
+
+<style>
+  .rise {
+    animation: rise 700ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+  .rise-2 {
+    animation-delay: 120ms;
+  }
+  .rise-3 {
+    animation-delay: 260ms;
+  }
+  @keyframes rise {
+    from {
+      opacity: 0;
+      transform: translateY(1.5rem);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .rise {
+      animation: none;
+    }
+  }
+
+  .btn-slot {
+    min-height: 3.5rem;
+    min-width: 12rem;
+  }
+
+  .btn {
+    grid-area: 1 / 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 2.75rem; /* 44px target */
+    padding: 0 2rem;
+    font-family: var(--font-mono);
+    font-size: var(--text-label);
+    letter-spacing: var(--text-label--letter-spacing);
+    text-transform: uppercase;
+    border: 1px solid transparent;
+    transition:
+      background-color 400ms ease,
+      color 400ms ease,
+      border-color 400ms ease,
+      outline-color 400ms ease,
+      opacity 400ms ease,
+      visibility 400ms;
+  }
+
+  .demo-btn {
+    display: inline-grid;
+    place-items: center;
+    cursor: default;
+    outline: 2px solid transparent;
+    outline-offset: 3px;
+    border: 1px dashed var(--hairline);
+    background: transparent;
+    color: var(--muted);
+    animation: breathe 4.5s ease-in-out infinite;
+  }
+  @keyframes breathe {
+    0%,
+    100% {
+      scale: 1;
+    }
+    50% {
+      scale: 1.008;
+    }
+  }
+  .btn-slot {
+    will-change: transform;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .demo-btn {
+      animation: none;
+    }
+  }
+  .lbl {
+    grid-area: 1 / 1;
+    transition: opacity 400ms ease;
+  }
+  .lbl-real {
+    opacity: 0;
+  }
+
+  [data-stage='2'] .demo-btn,
+  [data-stage='3'] .demo-btn,
+  [data-stage='4'] .demo-btn,
+  [data-stage='5'] .demo-btn {
+    border: 1px solid var(--ink);
+    color: var(--ink);
+  }
+  [data-stage='2'] .lbl-sketch,
+  [data-stage='3'] .lbl-sketch,
+  [data-stage='4'] .lbl-sketch,
+  [data-stage='5'] .lbl-sketch,
+  [data-stage='6'] .lbl-sketch {
+    opacity: 0;
+  }
+  [data-stage='2'] .lbl-real,
+  [data-stage='3'] .lbl-real,
+  [data-stage='4'] .lbl-real,
+  [data-stage='5'] .lbl-real,
+  [data-stage='6'] .lbl-real {
+    opacity: 1;
+  }
+
+  .ghost-cursor {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    opacity: 0;
+    pointer-events: none;
+    transform: translate(4rem, 3rem);
+  }
+  [data-stage='3'] .ghost-cursor {
+    animation: cursor-visit 2.2s ease 0.3s 1 forwards;
+  }
+  [data-stage='3'] .demo-btn {
+    animation: demo-hover 2.2s ease 0.3s 1 forwards;
+  }
+  @keyframes cursor-visit {
+    0% {
+      opacity: 0;
+      transform: translate(4rem, 3rem);
+    }
+    25% {
+      opacity: 1;
+    }
+    55% {
+      transform: translate(0.4rem, 0.2rem);
+      opacity: 1;
+    }
+    80% {
+      transform: translate(0.4rem, 0.2rem);
+      opacity: 1;
+    }
+    100% {
+      opacity: 0;
+      transform: translate(0.4rem, 0.2rem);
+    }
+  }
+  @keyframes demo-hover {
+    0%,
+    40% {
+      background-color: transparent;
+    }
+    55%,
+    85% {
+      background-color: var(--surface);
+    }
+    100% {
+      background-color: transparent;
+    }
+  }
+
+  [data-stage='4'] .demo-btn {
+    outline-color: var(--accent);
+  }
+
+  .real-btn {
+    background: var(--ink);
+    color: var(--paper);
+    opacity: 0;
+    visibility: hidden;
+  }
+  .real-btn:hover {
+    background: var(--accent);
+    color: var(--paper);
+  }
+  .real-btn:active {
+    transform: translateY(1px) scale(0.985);
+  }
+  [data-stage='6'] .demo-btn {
+    opacity: 0;
+    visibility: hidden;
+  }
+  [data-stage='6'] .real-btn {
+    opacity: 1;
+    visibility: visible;
+  }
+
+  /* Blueprint annotations: draw in when their stage is active, clear on ship */
+  .blueprint .guide {
+    stroke-dasharray: 1;
+    stroke-dashoffset: 1;
+    opacity: 0;
+    transition:
+      stroke-dashoffset 650ms cubic-bezier(0.16, 1, 0.3, 1),
+      opacity 250ms ease;
+  }
+  .bp-label {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    fill: var(--muted);
+    opacity: 0;
+    transition: opacity 350ms ease 300ms;
+  }
+  /* crop marks live through the drafting stages 1-5 */
+  [data-stage='1'] .bp-marks .guide,
+  [data-stage='2'] .bp-marks .guide,
+  [data-stage='3'] .bp-marks .guide,
+  [data-stage='4'] .bp-marks .guide,
+  [data-stage='5'] .bp-marks .guide {
+    stroke-dashoffset: 0;
+    opacity: 0.7;
+  }
+  [data-stage='1'] .bp-1 .guide,
+  [data-stage='2'] .bp-2 .guide,
+  [data-stage='3'] .bp-3 .guide,
+  [data-stage='4'] .bp-4 .guide,
+  [data-stage='5'] .bp-5 .guide {
+    stroke-dashoffset: 0;
+    opacity: 1;
+  }
+  [data-stage='1'] text.bp-1,
+  [data-stage='2'] text.bp-2,
+  [data-stage='3'] text.bp-3,
+  [data-stage='4'] text.bp-4 {
+    opacity: 1;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .blueprint .guide,
+    .bp-label {
+      transition: none;
+    }
+  }
+
+  #floating-cta {
+    position: fixed;
+    right: clamp(1rem, 3vw, 2.5rem);
+    bottom: clamp(1rem, 3vw, 2rem);
+    z-index: 20;
+    display: inline-flex;
+    align-items: center;
+    min-height: 2.75rem;
+    padding: 0 1.5rem;
+    background: var(--ink);
+    color: var(--paper);
+    opacity: 0;
+    transform: translateY(0.75rem);
+    pointer-events: none;
+    transition:
+      opacity 350ms ease,
+      transform 350ms cubic-bezier(0.16, 1, 0.3, 1),
+      background-color 200ms ease;
+  }
+  #floating-cta:hover {
+    background: var(--accent);
+  }
+  #floating-cta:active {
+    transform: translateY(1px);
+  }
+  :global([data-cta='on']) #floating-cta {
+    opacity: 1;
+    transform: none;
+    pointer-events: auto;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    #floating-cta {
+      transition: opacity 200ms ease;
+    }
+  }
+
+  .readout {
+    height: 1.25rem;
+    place-items: center;
+  }
+  .ro {
+    grid-area: 1 / 1;
+    opacity: 0;
+    transition: opacity 400ms ease;
+  }
+  [data-stage='1'] .ro-1,
+  [data-stage='2'] .ro-2,
+  [data-stage='3'] .ro-3,
+  [data-stage='4'] .ro-4,
+  [data-stage='5'] .ro-5,
+  [data-stage='6'] .ro-6 {
+    opacity: 1;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .btn,
+    .lbl,
+    .ro {
+      transition: none;
+    }
+    .ghost-cursor,
+    [data-stage='3'] .ghost-cursor {
+      animation: none;
+      opacity: 0;
+    }
+    [data-stage='3'] .demo-btn {
+      animation: none;
+    }
+  }
+</style>
+
+<script>
+  const stage = document.getElementById('stage')!;
+  const steps = document.querySelectorAll<HTMLElement>('[data-step]');
+  const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  if (reduced) {
+    stage.dataset.stage = '6';
+  } else {
+    const io = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting && entry.target instanceof HTMLElement) {
+            stage.dataset.stage = entry.target.dataset.step!;
+          }
+        }
+      },
+      { rootMargin: '-40% 0px -40% 0px' },
+    );
+    steps.forEach((s) => io.observe(s));
+  }
+
+  // Deployed CTA: appears once the visitor reaches the content after the story,
+  // retires when Contact is on screen (the CTA would be redundant there)
+  const afterStory = document.getElementById('experience');
+  const contact = document.getElementById('contact');
+  const cta = document.getElementById('floating-cta');
+  if (afterStory && cta) {
+    // State is computed fresh from geometry on every observer event — observers
+    // only tell us "something moved", so jumps (anchors, instant scrolls) stay correct.
+    const applyCta = () => {
+      const pastStory = afterStory.getBoundingClientRect().top < innerHeight * 0.85;
+      const contactRect = contact?.getBoundingClientRect();
+      const contactVisible = !!contactRect && contactRect.top < innerHeight && contactRect.bottom > 0;
+      const on = pastStory && !contactVisible;
+      if (on) {
+        document.documentElement.setAttribute('data-cta', 'on');
+      } else {
+        document.documentElement.removeAttribute('data-cta');
+      }
+      cta.setAttribute('aria-hidden', String(!on));
+      cta.tabIndex = on ? 0 : -1;
+    };
+    const watcher = new IntersectionObserver(applyCta, { threshold: [0, 0.01, 1] });
+    watcher.observe(afterStory);
+    if (contact) watcher.observe(contact);
+    document.querySelectorAll('[data-step]').forEach((s) => watcher.observe(s));
+  }
+
+  // The button is alive: it leans a few pixels toward a nearby cursor
+  const slot = document.querySelector<HTMLElement>('.btn-slot');
+  if (slot && !reduced && matchMedia('(pointer: fine)').matches) {
+    let targetX = 0;
+    let targetY = 0;
+    let x = 0;
+    let y = 0;
+    let raf = 0;
+    const settle = () => {
+      x += (targetX - x) * 0.12;
+      y += (targetY - y) * 0.12;
+      slot.style.transform = `translate(${x.toFixed(2)}px, ${y.toFixed(2)}px)`;
+      if (Math.abs(targetX - x) > 0.05 || Math.abs(targetY - y) > 0.05) {
+        raf = requestAnimationFrame(settle);
+      } else {
+        raf = 0;
+      }
+    };
+    window.addEventListener('pointermove', (e) => {
+      const r = slot.getBoundingClientRect();
+      const dx = e.clientX - (r.left + r.width / 2);
+      const dy = e.clientY - (r.top + r.height / 2);
+      const dist = Math.hypot(dx, dy);
+      const reach = 180;
+      const pull = dist < reach ? (1 - dist / reach) * 3 : 0;
+      targetX = (dx / (dist || 1)) * pull;
+      targetY = (dy / (dist || 1)) * pull;
+      if (!raf) raf = requestAnimationFrame(settle);
+    });
+  }
+</script>

@@ -1,0 +1,47 @@
+---
+import { projects } from '../data/projects';
+import { type Lang, useTranslations } from '../i18n/ui';
+
+interface Props {
+  lang: Lang;
+}
+
+const { lang } = Astro.props;
+const t = useTranslations(lang);
+---
+
+<section id="projects" class="mx-auto max-w-6xl scroll-mt-12 px-(--spacing-gutter) py-(--spacing-section)">
+  <p class="label-mono text-accent">{t('projects.label')}</p>
+  <h2 class="mt-4 font-display text-title">{t('projects.title')}</h2>
+
+  <ol class="mt-12 border-t border-hairline">
+    {
+      projects.map((project, i) => (
+        <li class="group border-b border-hairline">
+          <a
+            href={project.href}
+            target="_blank"
+            rel="noopener noreferrer"
+            class="grid gap-2 py-7 sm:grid-cols-[3rem_minmax(0,1fr)_minmax(0,1.4fr)_auto] sm:items-baseline sm:gap-6"
+          >
+            <span class="label-mono text-muted transition-colors group-hover:text-accent">
+              {String(i + 1).padStart(2, '0')}
+            </span>
+            <span class="font-mono text-base break-words transition-colors group-hover:text-accent">
+              {project.name}
+            </span>
+            <span class="text-sm leading-relaxed text-muted">{project.description[lang]}</span>
+            <span class="label-mono hidden text-muted sm:inline"
+              >{project.meta}
+              <span
+                aria-hidden="true"
+                class="inline-block transition-transform duration-200 group-hover:-translate-y-0.5 group-hover:translate-x-0.5"
+                >↗</span
+              ></span
+            >
+          </a>
+        </li>
+      ))
+    }
+  </ol>
+</section>

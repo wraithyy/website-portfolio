@@ -1,0 +1,78 @@
+---
+import '@fontsource/instrument-serif';
+import '@fontsource/jetbrains-mono';
+import '@fontsource-variable/public-sans';
+import '../styles/global.css';
+import { getAbsoluteLocaleUrl } from 'astro:i18n';
+import { type Lang, useTranslations } from '../i18n/ui';
+
+interface Props {
+  lang: Lang;
+}
+
+const { lang } = Astro.props;
+const t = useTranslations(lang);
+---
+
+<!doctype html>
+<html lang={lang}>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{t('meta.title')}</title>
+    <meta name="description" content={t('meta.description')} />
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#faf8f4" />
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#121110" />
+    <link rel="canonical" href={new URL(Astro.url.pathname, Astro.site)} />
+    <meta property="og:title" content={t('meta.title')} />
+    <meta property="og:description" content={t('meta.description')} />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content={new URL(Astro.url.pathname, Astro.site)} />
+    <meta property="og:image" content={new URL('/og.png', Astro.site)} />
+    <meta property="og:locale" content={lang === 'cs' ? 'cs_CZ' : 'en_US'} />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <script
+      is:inline
+      type="application/ld+json"
+      set:html={JSON.stringify({
+        '@context': 'https://schema.org',
+        '@type': 'Person',
+        name: 'Josef Kvapil',
+        jobTitle: 'Frontend Architect',
+        email: 'mailto:josef0kvapil@gmail.com',
+        url: Astro.site?.toString(),
+        sameAs: ['https://github.com/wraithyy', 'https://www.linkedin.com/in/josef-kvapil'],
+        worksFor: { '@type': 'Organization', name: 'Trask' },
+        address: { '@type': 'PostalAddress', addressLocality: 'Prague', addressCountry: 'CZ' },
+      })}
+    />
+    <link rel="alternate" hreflang="en" href={getAbsoluteLocaleUrl('en', '')} />
+    <link rel="alternate" hreflang="cs" href={getAbsoluteLocaleUrl('cs', '')} />
+    <link rel="alternate" hreflang="x-default" href={getAbsoluteLocaleUrl('en', '')} />
+    <script is:inline>
+      (() => {
+        let stored = null;
+        try {
+          stored = localStorage.getItem('theme');
+        } catch {}
+        const theme =
+          stored === 'dark' || stored === 'light'
+            ? stored
+            : matchMedia('(prefers-color-scheme: dark)').matches
+              ? 'dark'
+              : 'light';
+        document.documentElement.dataset.theme = theme;
+      })();
+    </script>
+  </head>
+  <body>
+    <a
+      href="#main-content"
+      class="label-mono sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-10 focus:bg-paper focus:px-3 focus:py-2"
+    >
+      {t('nav.skip')}
+    </a>
+    <slot />
+  </body>
+</html>

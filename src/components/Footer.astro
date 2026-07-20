@@ -1,0 +1,16 @@
+---
+import { type Lang, useTranslations } from '../i18n/ui';
+
+interface Props {
+  lang: Lang;
+}
+
+const { lang } = Astro.props;
+const t = useTranslations(lang);
+const year = new Date().getFullYear();
+---
+
+<footer class="mx-auto flex max-w-6xl flex-wrap items-baseline justify-between gap-4 px-(--spacing-gutter) pt-8 pb-10">
+  <p class="label-mono text-muted">© {year} Josef Kvapil</p>
+  <p class="label-mono text-muted">{t('footer.colophon')}</p>
+</footer>
