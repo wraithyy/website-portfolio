@@ -1,5 +1,5 @@
 {
-  "name": "",
+  "name": "website-portfolio",
   "type": "module",
   "version": "0.0.1",
   "engines": {
@@ -18,10 +18,9 @@
     "@fontsource/instrument-serif": "^5.3.0",
     "@fontsource/jetbrains-mono": "^5.3.0",
     "@tailwindcss/vite": "^4.3.3",
-    "@types/three": "^0.185.1",
     "astro": "^7.1.1",
     "tailwindcss": "^4.3.3",
-    "three": "^0.185.1",
     "typescript": "^7.0.2"
-  }
+  },
+  "packageManager": "pnpm@11.15.1"
 }
