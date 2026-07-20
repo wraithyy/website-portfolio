@@ -45,4 +45,6 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          # install wrangler via npm — pnpm >=10 blocks workerd's postinstall script
+          packageManager: npm
           command: pages deploy dist --project-name=website-portfolio --branch=main
