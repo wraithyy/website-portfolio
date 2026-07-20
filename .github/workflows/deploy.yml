@@ -7,9 +7,8 @@
 # First deploy creates the Pages project "website-portfolio" automatically.
 # Custom domain (jkvapil.cz) is attached in the Cloudflare dashboard:
 #   Pages → website-portfolio → Custom domains → add jkvapil.cz
-# Redirect domains (jkvapil.info, jkvapil.online) are NOT part of this repo:
-#   add both zones to Cloudflare → Rules → Redirect Rules →
-#   dynamic redirect to concat("https://jkvapil.cz", http.request.uri.path), 301
+# Redirect domains (jkvapil.info, jkvapil.online) are configured as
+# Redirect Rules on their zones, not in this repo.
 
 name: Deploy
 
@@ -25,13 +24,14 @@ jobs:
       contents: read
       deployments: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: pnpm/action-setup@v4
+      # reads the pinned version from package.json "packageManager"
+      - uses: pnpm/action-setup@v6
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version: 24
           cache: pnpm
 
       - name: Install dependencies
@@ -41,10 +41,10 @@ jobs:
         run: pnpm astro build
 
       - name: Deploy to Cloudflare Pages
-        uses: cloudflare/wrangler-action@v3
+        uses: cloudflare/wrangler-action@v4
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          # install wrangler via npm — pnpm >=10 blocks workerd's postinstall script
-          packageManager: npm
+          # wrangler is a devDependency — the action reuses the pnpm install
+          packageManager: pnpm
           command: pages deploy dist --project-name=website-portfolio --branch=main
