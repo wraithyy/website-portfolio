@@ -89,7 +89,9 @@ body {
   animation: none;
 }
 ::view-transition-new(root) {
-  animation: theme-reveal 900ms cubic-bezier(0.45, 0, 0.2, 1) both;
+  /* deliberately dramatic: slow ignition around the toggle, then the wash
+     accelerates hard across the page and lands soft */
+  animation: theme-reveal 1100ms cubic-bezier(0.85, 0, 0.15, 1) both;
 }
 @keyframes theme-reveal {
   from {
