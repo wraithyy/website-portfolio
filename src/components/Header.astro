@@ -90,6 +90,24 @@ const itemCount = String(items.length).padStart(2, '0');
           </a>
         ))
       }
+      <a
+        href={langTarget}
+        hreflang={lang === 'en' ? 'cs' : 'en'}
+        lang={lang === 'en' ? 'cs' : 'en'}
+        class="label-mono text-muted transition-colors hover:text-accent"
+      >
+        {t('nav.langSwitch')}
+      </a>
+      <button
+        type="button"
+        data-theme-toggle
+        class="label-mono cursor-pointer text-muted transition-colors hover:text-accent"
+        aria-pressed="false"
+      >
+        <span class="dark:hidden">dark</span>
+        <span class="hidden dark:inline">light</span>
+        <span class="sr-only">{t('nav.themeToggle')}</span>
+      </button>
     </nav>
     <button
       type="button"
