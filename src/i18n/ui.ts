@@ -5,8 +5,6 @@ export const languages = {
 
 export type Lang = keyof typeof languages;
 
-export const defaultLang: Lang = 'en';
-
 export const ui = {
   en: {
     'meta.title': 'Josef Kvapil — Frontend Architect',
@@ -112,14 +110,8 @@ export const ui = {
 
 export type UiKey = keyof (typeof ui)['en'];
 
-export function getLangFromUrl(url: URL): Lang {
-  const [, lang] = url.pathname.split('/');
-  if (lang && lang in ui) return lang as Lang;
-  return defaultLang;
-}
-
 export function useTranslations(lang: Lang) {
   return function t(key: UiKey): string {
-    return ui[lang][key] ?? ui[defaultLang][key];
+    return ui[lang][key];
   };
 }
