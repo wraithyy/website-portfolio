@@ -592,26 +592,14 @@ const t = useTranslations(lang);
     let x = 0;
     let y = 0;
     let raf = 0;
-    const settle = () => {
-      x += (targetX - x) * 0.12;
-      y += (targetY - y) * 0.12;
-      slot.style.transform = `translate(${x.toFixed(2)}px, ${y.toFixed(2)}px)`;
-      if (Math.abs(targetX - x) > 0.05 || Math.abs(targetY - y) > 0.05) {
-        raf = requestAnimationFrame(settle);
-      } else {
-        raf = 0;
-      }
-    };
-    // rect measured once per frame, not per pointer event
-    let pointerRaf = 0;
     let px = 0;
     let py = 0;
-    window.addEventListener('pointermove', (e) => {
-      px = e.clientX;
-      py = e.clientY;
-      if (pointerRaf) return;
-      pointerRaf = requestAnimationFrame(() => {
-        pointerRaf = 0;
+    let pointerDirty = false;
+    // single frame loop, layout READ strictly before the transform WRITE —
+    // two separate rAF callbacks used to interleave write→read (forced reflow)
+    const settle = () => {
+      if (pointerDirty) {
+        pointerDirty = false;
         const r = slot.getBoundingClientRect();
         const dx = px - (r.left + r.width / 2);
         const dy = py - (r.top + r.height / 2);
@@ -620,8 +608,21 @@ const t = useTranslations(lang);
         const pull = dist < reach ? (1 - dist / reach) * 3 : 0;
         targetX = (dx / (dist || 1)) * pull;
         targetY = (dy / (dist || 1)) * pull;
-        if (!raf) raf = requestAnimationFrame(settle);
-      });
+      }
+      x += (targetX - x) * 0.12;
+      y += (targetY - y) * 0.12;
+      slot.style.transform = `translate(${x.toFixed(2)}px, ${y.toFixed(2)}px)`;
+      if (pointerDirty || Math.abs(targetX - x) > 0.05 || Math.abs(targetY - y) > 0.05) {
+        raf = requestAnimationFrame(settle);
+      } else {
+        raf = 0;
+      }
+    };
+    window.addEventListener('pointermove', (e) => {
+      px = e.clientX;
+      py = e.clientY;
+      pointerDirty = true;
+      if (!raf) raf = requestAnimationFrame(settle);
     });
   }
 </script>
