@@ -20,7 +20,7 @@ const t = useTranslations(lang);
       </h1>
     </div>
     <p class="rise rise-3 mt-8 max-w-lg text-lg leading-relaxed text-muted">{t('story.intro')}</p>
-    <p class="rise rise-4 label-mono mt-8 text-muted">{t('story.facts')}</p>
+    <p class="rise rise-4 label-mono mt-8">{t('story.facts')}</p>
   </section>
 
   <div class="grid lg:grid-cols-2 lg:gap-16">
@@ -117,7 +117,7 @@ const t = useTranslations(lang);
         storySteps.map((step, i) => (
           <section
             data-step={i + 1}
-            class={`flex min-h-[30vh] flex-col justify-center py-10 lg:min-h-[44vh] ${i < storySteps.length - 1 ? 'border-b border-hairline' : ''}`}
+            class={`flex min-h-[30vh] flex-col justify-center py-10 lg:min-h-[38vh] ${i < storySteps.length - 1 ? 'border-b border-hairline' : ''}`}
           >
             <p class="label-mono text-accent">{step.label[lang]}</p>
             <h2 class="mt-4 font-display text-title">{step.title[lang]}</h2>

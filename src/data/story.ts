@@ -62,7 +62,7 @@ export const storySteps: StoryStep[] = [
   },
   {
     label: { en: '05 — Review & AI leverage', cs: '05 — Review & AI' },
-    title: { en: 'Then it has to prove itself.', cs: 'Pak to musí dokázat.' },
+    title: { en: 'Then every line has to prove itself.', cs: 'Pak se každý řádek musí obhájit.' },
     onButton: { en: 'one diff: reviewed, tested, signed', cs: 'jeden diff: review, testy, podpis' },
     onPlatform: {
       en: 'every diff from dozens of developers: the same bar',
@@ -75,7 +75,7 @@ export const storySteps: StoryStep[] = [
   },
   {
     label: { en: '06 — Delivery', cs: '06 — Dodávka' },
-    title: { en: 'Now it’s real.', cs: 'Teď je to naostro.' },
+    title: { en: 'Shipped. Both of them.', cs: 'Nasazeno. Obojí.' },
     onButton: { en: 'live in production — press it', cs: 'naživo v produkci — zmáčkněte si ho' },
     onPlatform: {
       en: 'live for banks, insurers and utilities',

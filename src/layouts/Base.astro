@@ -15,9 +15,10 @@ import { type Lang, useTranslations } from '../i18n/ui';
 
 interface Props {
   lang: Lang;
+  noindex?: boolean;
 }
 
-const { lang } = Astro.props;
+const { lang, noindex = false } = Astro.props;
 const t = useTranslations(lang);
 
 // Czech glyphs (ě š č ř ž …) live in latin-ext — preload it only where it is used
@@ -34,6 +35,8 @@ const fontPreloads =
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{t('meta.title')}</title>
     <meta name="description" content={t('meta.description')} />
+    <meta name="author" content="Josef Kvapil" />
+    {noindex && <meta name="robots" content="noindex" />}
     <meta name="theme-color" media="(prefers-color-scheme: light)" content="#faf8f4" />
     <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#121110" />
     <link rel="canonical" href={new URL(Astro.url.pathname, Astro.site)} />
@@ -42,8 +45,14 @@ const fontPreloads =
     <meta property="og:type" content="website" />
     <meta property="og:url" content={new URL(Astro.url.pathname, Astro.site)} />
     <meta property="og:image" content={new URL('/og.png', Astro.site)} />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
     <meta property="og:locale" content={lang === 'cs' ? 'cs_CZ' : 'en_US'} />
+    <meta property="og:locale:alternate" content={lang === 'cs' ? 'en_US' : 'cs_CZ'} />
     <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={t('meta.title')} />
+    <meta name="twitter:description" content={t('meta.description')} />
+    <meta name="twitter:image" content={new URL('/og.png', Astro.site)} />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     {fontPreloads.map((href) => <link rel="preload" href={href} as="font" type="font/woff2" crossorigin />)}
     <script

@@ -17,7 +17,7 @@
   --ink: #e8e4dc;
   --muted: #918c84;
   --accent: #ff5a3c;
-  --hairline: #2b2926;
+  --hairline: #363330;
   --surface: #1a1917;
 }
 
@@ -65,6 +65,9 @@ body {
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
   transition: background-color 200ms ease, color 200ms ease;
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+  }
 }
 
 :root {

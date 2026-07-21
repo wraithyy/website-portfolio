@@ -9,7 +9,7 @@ export const ui = {
   en: {
     'meta.title': 'Josef Kvapil — Frontend Architect',
     'meta.description':
-      'Frontend architect and team lead. React and TypeScript platforms for banking, energy and insurance — and open-source tooling that keeps frontend code honest.',
+      'Frontend architect and team lead. React and TypeScript platforms for banking, energy and insurance — and open-source tooling that keeps code honest.',
     'nav.skip': 'Skip to main content',
     'nav.projects': 'Open source',
     'nav.experience': 'Capabilities',
@@ -23,10 +23,10 @@ export const ui = {
     'story.kicker': 'Frontend architect — Liberec',
     'story.headline': 'A button, built the way I build platforms.',
     'story.intro':
-      'I architect and lead frontend platforms for banks and enterprises. Here is the foundation: six steps, in order, none skipped — on a button or a platform.',
+      'I architect and lead frontend platforms for banks and enterprises. Here is the foundation: six steps, in order, none skipped.',
     'story.facts':
-      'Josef Kvapil · senior frontend architect · 10+ years · banking, insurance, energy · Liberec, CZ',
-    'story.bridge': 'I can lead the big because I never skipped the small.',
+      'Josef Kvapil · senior frontend architect · React & TypeScript · 10+ years · banking, insurance, energy · Liberec, CZ',
+    'story.bridge': 'I can lead the big things because I never skipped the small ones.',
     'story.bridgeMeta': 'architecture · leadership · React · TypeScript · TanStack',
     'story.btnSketch': 'btn / primary',
     'story.btnReal': 'Say hello',
@@ -34,22 +34,24 @@ export const ui = {
 
     'exp.label': 'Capabilities',
     'exp.title': 'What I bring to a project.',
-    'exp.note': 'Real deliveries; clients unnamed by design.',
+    'exp.note': 'Real deliveries; I deliberately don’t name clients.',
 
     'projects.label': 'Open source',
     'projects.title': 'Tools that speak for me in public',
     'about.label': 'About',
     'about.title': 'I dig into how things work underneath.',
     'about.bio':
-      'I wrote my first PHP website in sixth grade and never stopped. Today that means React and TanStack down to the internals — and knowing when a project needs boring and proven instead. I work AI-first, with one hard rule: AI drafts, an engineer signs. Vibecoding is not engineering.',
+      'I wrote my first PHP website in sixth grade and never stopped. Today that means React and TanStack down to the internals — and knowing when a project needs boring and proven instead. I work AI-first, with one hard rule:',
+    'about.aiStance': 'AI drafts, an engineer signs. Vibecoding is not engineering.',
     'about.stackLabel': 'Stack',
-    'about.employersLabel': 'Employment',
+    'about.employersLabel': 'Where I’ve worked',
     'about.factsLabel': 'For the record',
     'about.facts':
       'AWS Certified Cloud Practitioner · Anthropic Claude Code certifications · mentoring & internal talks · CZ / EN / DE',
     'contact.label': 'Contact',
-    'contact.title': 'Say hello',
-    'contact.body': 'Open to interesting frontend problems, architecture work and open-source collaboration.',
+    'contact.title': 'Bring me a hard problem.',
+    'contact.body':
+      'I like sinking my teeth into interesting frontend problems, architecture work and open-source collaboration.',
     'contact.cv': 'download CV (PDF)',
     'contact.meta': 'remote or hybrid · Liberec / Prague · CZ / EN',
     'contact.ctaLabel': 'btn / your-project',
@@ -59,7 +61,7 @@ export const ui = {
   cs: {
     'meta.title': 'Josef Kvapil — Frontend architekt',
     'meta.description':
-      'Frontend architekt a team lead. React a TypeScript platformy pro bankovnictví, energetiku a pojišťovnictví — a open-source nástroje, které drží frontend kód v lati.',
+      'Frontend architekt a team lead. React a TypeScript pro bankovnictví, energetiku a pojišťovnictví — a open-source nástroje, které drží kód v lati.',
     'nav.skip': 'Přeskočit na hlavní obsah',
     'nav.projects': 'Open source',
     'nav.experience': 'Co umím',
@@ -71,11 +73,11 @@ export const ui = {
     'nav.close': 'zavřít',
 
     'story.kicker': 'Frontend architekt — Liberec',
-    'story.headline': 'Tlačítko postavené stejně, jako stavím platformy.',
+    'story.headline': 'Tlačítko postavené stejně jako moje platformy.',
     'story.intro':
-      'Navrhuju a vedu frontend platformy pro banky a enterprise. Tady jsou základy: šest kroků, popořadě, žádný se nepřeskakuje — u tlačítka ani u platformy.',
+      'Navrhuju a vedu frontend platformy pro banky a enterprise. Tady jsou základy: šest kroků, popořadě, žádný se nepřeskakuje.',
     'story.facts':
-      'Josef Kvapil · senior frontend architekt · 10+ let · bankovnictví, pojišťovnictví, energetika · Liberec',
+      'Josef Kvapil · senior frontend architekt · React & TypeScript · 10+ let · bankovnictví, pojišťovnictví, energetika · Liberec, CZ',
     'story.bridge': 'Velké věci zvládnu vést, protože jsem nikdy nepřeskočil ty malé.',
     'story.bridgeMeta': 'architektura · leadership · React · TypeScript · TanStack',
     'story.btnSketch': 'btn / primary',
@@ -91,16 +93,17 @@ export const ui = {
     'about.label': 'O mně',
     'about.title': 'Zajímá mě, jak věci fungují uvnitř.',
     'about.bio':
-      'První web jsem v PHP napsal v šesté třídě a nepřestal. Dnes to znamená React a TanStack až do zdrojáků — a vědomí, kdy projekt potřebuje raději nudné a prověřené. Pracuju AI-first s jedním tvrdým pravidlem: AI draftuje, inženýr podepisuje. Vibecoding není inženýrství.',
+      'První web jsem v PHP napsal v šesté třídě a nepřestal. Dnes to znamená React a TanStack až do zdrojáků — a vědomí, kdy projekt potřebuje raději nudné a prověřené. Pracuju AI-first s jedním tvrdým pravidlem:',
+    'about.aiStance': 'AI navrhne, inženýr podepíše. Vibecoding není inženýrství.',
     'about.stackLabel': 'Stack',
     'about.employersLabel': 'Kde jsem pracoval',
     'about.factsLabel': 'Pro pořádek',
     'about.facts':
       'AWS Certified Cloud Practitioner · Anthropic Claude Code certifikace · mentoring a interní přednášky · CZ / EN / DE',
     'contact.label': 'Kontakt',
-    'contact.title': 'Ozvěte se',
+    'contact.title': 'Přineste mi tvrdý oříšek.',
     'contact.body': 'Rád se zakousnu do zajímavého frontend problému, architektury i open-source spolupráce.',
-    'contact.cv': 'životopis (PDF)',
+    'contact.cv': 'stáhnout životopis (PDF)',
     'contact.meta': 'remote i hybrid · Liberec / Praha · CZ / EN',
     'contact.ctaLabel': 'btn / váš-projekt',
     'contact.ctaNote': 'další výkres může být váš',

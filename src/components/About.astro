@@ -19,7 +19,7 @@ const stackGroups: Array<{ label: Record<Lang, string>; items: string }> = [
   },
   {
     label: { en: 'I find my way in', cs: 'zorientuju se v' },
-    items: 'Rust · Java · C# · PHP · Angular · Vue · Kotlin · Go · Elixir · Gleam · Swift',
+    items: 'Angular · Java · Rust · Go · Elixir · Gleam',
   },
 ];
 
@@ -64,6 +64,7 @@ const employers: Array<{ years: Record<Lang, string>; name: string; role: Record
     </div>
     <div>
       <p class="max-w-xl text-lg leading-relaxed text-muted">{t('about.bio')}</p>
+      <p class="mt-5 max-w-xl font-display text-2xl leading-snug text-balance">{t('about.aiStance')}</p>
       <p class="label-mono mt-10 text-muted">{t('about.stackLabel')}</p>
       <dl class="mt-3 max-w-xl space-y-2">
         {
