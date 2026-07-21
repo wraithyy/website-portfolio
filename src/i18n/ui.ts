@@ -19,6 +19,8 @@ export const ui = {
     'nav.contact': 'Contact',
     'nav.themeToggle': 'Toggle dark mode',
     'nav.langSwitch': 'Česky',
+    'nav.menu': 'index',
+    'nav.close': 'close',
 
     'story.kicker': 'Frontend architect — Liberec',
     'story.headline': 'A button, built the way I build platforms.',
@@ -31,19 +33,15 @@ export const ui = {
 
     'exp.label': 'Capabilities',
     'exp.title': 'What I bring to a project.',
-    'exp.note': 'Every proof is a real delivery. Clients stay unnamed by design — discretion is part of the job.',
+    'exp.note': 'Real deliveries; clients unnamed by design.',
 
     'projects.label': 'Open source',
-    'projects.title': 'Tools that keep my honesty public',
+    'projects.title': 'Tools that speak for me in public',
     'about.label': 'About',
     'about.title': 'I dig into how things work underneath.',
     'about.bio':
-      'I wrote my first PHP website in sixth grade and never stopped. Today that means React and TanStack down to the internals, a train seat to the next conference — and knowing exactly when a project needs proven and stable instead of cutting-edge.',
-    'about.ai':
-      'AI-assisted since the GitHub Copilot closed beta. Today: an AI-first workflow, my own agent tooling, internal talks. The rule is simple — AI drafts, an engineer signs. Vibecoding is not engineering.',
+      'I wrote my first PHP website in sixth grade and never stopped. Today that means React and TanStack down to the internals — and knowing when a project needs boring and proven instead. I work AI-first, with one hard rule: AI drafts, an engineer signs. Vibecoding is not engineering.',
     'about.stackLabel': 'Stack',
-    'about.polyglot':
-      'A new language is not a barrier — I find my way around an unfamiliar codebase fast, whatever it is written in.',
     'about.employersLabel': 'Employment',
     'about.factsLabel': 'For the record',
     'about.facts':
@@ -64,6 +62,8 @@ export const ui = {
     'nav.contact': 'Kontakt',
     'nav.themeToggle': 'Přepnout tmavý režim',
     'nav.langSwitch': 'English',
+    'nav.menu': 'index',
+    'nav.close': 'zavřít',
 
     'story.kicker': 'Frontend architekt — Liberec',
     'story.headline': 'Tlačítko postavené stejně, jako stavím platformy.',
@@ -76,19 +76,15 @@ export const ui = {
 
     'exp.label': 'Co umím',
     'exp.title': 'Co do projektu přináším.',
-    'exp.note': 'Každý důkaz je reálná dodávka. Klienty záměrně nejmenuji — diskrétnost je součást práce.',
+    'exp.note': 'Reálné dodávky; klienty záměrně nejmenuji.',
 
     'projects.label': 'Open source',
     'projects.title': 'Nástroje, které za mě mluví veřejně',
     'about.label': 'O mně',
     'about.title': 'Zajímá mě, jak věci fungují uvnitř.',
     'about.bio':
-      'První web jsem v PHP napsal v šesté třídě a nepřestal. Dnes to znamená React a TanStack až do zdrojáků, místenku na vlak na další konferenci — a přesnou znalost toho, kdy projekt potřebuje raději prověřené a stabilní než cutting-edge.',
-    'about.ai':
-      'AI-assisted vývoj od closed bety GitHub Copilotu. Dnes: AI-first workflow, vlastní agent tooling, interní přednášky. Pravidlo je prosté — AI draftuje, inženýr podepisuje. Vibecoding není inženýrství.',
+      'První web jsem v PHP napsal v šesté třídě a nepřestal. Dnes to znamená React a TanStack až do zdrojáků — a vědomí, kdy projekt potřebuje raději nudné a prověřené. Pracuju AI-first s jedním tvrdým pravidlem: AI draftuje, inženýr podepisuje. Vibecoding není inženýrství.',
     'about.stackLabel': 'Stack',
-    'about.polyglot':
-      'Nový jazyk pro mě není bariéra — v cizí codebase se zorientuju rychle, ať je napsaná v čemkoli.',
     'about.employersLabel': 'Kde jsem pracoval',
     'about.factsLabel': 'Pro pořádek',
     'about.facts':

@@ -65,7 +65,7 @@ const t = useTranslations(lang);
             <g class="bp bp-2" stroke="var(--accent)" stroke-width="1">
               <path pathlength="1" class="guide" d="M286 93 L 316 55 H 372"></path>
             </g>
-            <text class="bp bp-2 bp-label" x="318" y="47">ButtonProps</text>
+            <text class="bp bp-2 bp-label" x="306" y="47">ButtonProps</text>
 
             <!-- s3: easing curve -->
             <g class="bp bp-3" stroke-width="1">
@@ -113,8 +113,7 @@ const t = useTranslations(lang);
           >
             <p class="label-mono text-accent">{step.label[lang]}</p>
             <h2 class="mt-4 font-display text-title">{step.title[lang]}</h2>
-            <p class="mt-5 max-w-md leading-relaxed text-muted">{step.body[lang]}</p>
-            <dl class="label-mono mt-6 max-w-md space-y-1.5 border-l border-hairline pl-4 normal-case">
+            <dl class="label-mono mt-5 max-w-md space-y-1.5 border-l border-hairline pl-4 normal-case">
               <div class="grid grid-cols-[6.5rem_minmax(0,1fr)] gap-2">
                 <dt class="text-accent">{lang === 'cs' ? 'tlačítko →' : 'button →'}</dt>
                 <dd class="text-muted">{step.onButton[lang]}</dd>

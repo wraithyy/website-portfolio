@@ -1,5 +1,5 @@
 ---
-import { type Lang, useTranslations } from '../i18n/ui';
+import { type Lang, type UiKey, useTranslations } from '../i18n/ui';
 import Logo from './Logo.astro';
 
 interface Props {
@@ -9,31 +9,36 @@ interface Props {
 const { lang } = Astro.props;
 const t = useTranslations(lang);
 const langTarget = lang === 'en' ? '/cs/' : '/';
+const homeHref = lang === 'en' ? '/' : '/cs/';
+
+const items: { href: string; key: UiKey }[] = [
+  { href: '#experience', key: 'nav.experience' },
+  { href: '#projects', key: 'nav.projects' },
+  { href: '#about', key: 'nav.about' },
+  { href: '#contact', key: 'nav.contact' },
+];
+const num = (i: number) => String(i + 1).padStart(2, '0');
+const itemCount = String(items.length).padStart(2, '0');
 ---
 
 <header
   class="mx-auto flex max-w-6xl items-center justify-between gap-6 px-(--spacing-gutter) py-6"
 >
-  <a
-    href={lang === 'en' ? '/' : '/cs/'}
-    class="flex items-center gap-3 text-ink no-underline whitespace-nowrap"
-  >
+  <a href={homeHref} class="flex items-center gap-3 text-ink no-underline whitespace-nowrap">
     <Logo class="h-7 w-auto" />
     <span class="font-display text-2xl leading-none">Josef Kvapil</span>
   </a>
-  <nav class="flex flex-wrap items-baseline justify-end gap-x-5 gap-y-2 sm:gap-x-8" aria-label="Main">
-    <a href="#experience" class="label-mono hidden text-muted transition-colors hover:text-accent sm:inline">
-      {t('nav.experience')}
-    </a>
-    <a href="#projects" class="label-mono text-muted transition-colors hover:text-accent">
-      {t('nav.projects')}
-    </a>
-    <a href="#about" class="label-mono text-muted transition-colors hover:text-accent">
-      {t('nav.about')}
-    </a>
-    <a href="#contact" class="label-mono text-muted transition-colors hover:text-accent">
-      {t('nav.contact')}
-    </a>
+
+  <!-- Desktop: numbered index inline -->
+  <nav class="hidden items-baseline gap-x-7 md:flex" aria-label="Main">
+    {
+      items.map((item, i) => (
+        <a href={item.href} class="label-mono text-muted transition-colors hover:text-accent">
+          <span class="num text-accent" aria-hidden="true">{num(i)}</span>
+          {t(item.key)}
+        </a>
+      ))
+    }
     <a
       href={langTarget}
       hreflang={lang === 'en' ? 'cs' : 'en'}
@@ -43,8 +48,8 @@ const langTarget = lang === 'en' ? '/cs/' : '/';
       {t('nav.langSwitch')}
     </a>
     <button
-      id="theme-toggle"
       type="button"
+      data-theme-toggle
       class="label-mono cursor-pointer text-muted transition-colors hover:text-accent"
       aria-pressed="false"
     >
@@ -53,13 +58,95 @@ const langTarget = lang === 'en' ? '/cs/' : '/';
       <span class="sr-only">{t('nav.themeToggle')}</span>
     </button>
   </nav>
+
+  <!-- Mobile: index toggle -->
+  <button
+    id="nav-open"
+    type="button"
+    class="label-mono cursor-pointer text-muted transition-colors hover:text-accent md:hidden"
+    aria-expanded="false"
+    aria-controls="nav-index"
+  >
+    {t('nav.menu')} / <span class="text-accent">{itemCount}</span>
+  </button>
 </header>
 
+<!-- Mobile: fullscreen drawing index -->
+<div
+  id="nav-index"
+  role="dialog"
+  aria-modal="true"
+  aria-label={t('nav.menu')}
+  class="fixed inset-0 z-50 hidden flex-col bg-paper md:hidden!"
+>
+  <div
+    class="mx-auto flex w-full max-w-6xl items-center justify-between gap-6 px-(--spacing-gutter) py-6"
+  >
+    <a href={homeHref} class="flex items-center gap-3 text-ink no-underline whitespace-nowrap">
+      <Logo class="h-7 w-auto" />
+      <span class="font-display text-2xl leading-none">Josef Kvapil</span>
+    </a>
+    <button
+      id="nav-close"
+      type="button"
+      class="label-mono cursor-pointer text-muted transition-colors hover:text-accent"
+    >
+      {t('nav.close')} ×
+    </button>
+  </div>
+
+  <nav
+    class="flex flex-1 flex-col justify-center px-(--spacing-gutter)"
+    aria-label="Main"
+  >
+    {
+      items.map((item, i) => (
+        <a
+          href={item.href}
+          class="index-item flex items-baseline gap-5 border-b border-dashed border-hairline py-5 text-ink no-underline"
+          style={`--i: ${i}`}
+        >
+          <span class="label-mono text-accent" aria-hidden="true">{num(i)}</span>
+          <span class="font-display text-4xl">{t(item.key)}</span>
+        </a>
+      ))
+    }
+  </nav>
+
+  <!-- title block -->
+  <div
+    class="label-mono index-item mx-(--spacing-gutter) mb-6 flex items-center justify-between gap-4 border-t border-dashed border-hairline pt-5 text-muted"
+    style={`--i: ${items.length}`}
+  >
+    <span aria-hidden="true">JK · jkvapil.cz</span>
+    <div class="flex items-center gap-5">
+      <a
+        href={langTarget}
+        hreflang={lang === 'en' ? 'cs' : 'en'}
+        lang={lang === 'en' ? 'cs' : 'en'}
+        class="text-muted transition-colors hover:text-accent"
+      >
+        {t('nav.langSwitch')}
+      </a>
+      <button
+        type="button"
+        data-theme-toggle
+        class="cursor-pointer text-muted transition-colors hover:text-accent"
+        aria-pressed="false"
+      >
+        <span class="dark:hidden">dark</span>
+        <span class="hidden dark:inline">light</span>
+        <span class="sr-only">{t('nav.themeToggle')}</span>
+      </button>
+    </div>
+  </div>
+</div>
+
 <style>
-  nav a {
+  header nav a {
     position: relative;
   }
-  nav a::after {
+  header nav a::after {
     content: '';
     position: absolute;
     left: 0;
@@ -71,32 +158,99 @@ const langTarget = lang === 'en' ? '/cs/' : '/';
     transform-origin: left;
     transition: transform 250ms cubic-bezier(0.16, 1, 0.3, 1);
   }
-  nav a:hover::after,
-  nav a:focus-visible::after {
+  header nav a:hover::after,
+  header nav a:focus-visible::after {
     transform: scaleX(1);
   }
+  /* the drafting number sits outside the underline */
+  header nav a .num {
+    margin-right: 0.35em;
+  }
+  header nav a:has(.num)::after {
+    left: 1.6em;
+    width: calc(100% - 1.6em);
+  }
+
+  #nav-index[data-open] {
+    display: flex;
+  }
+  #nav-index .index-item {
+    opacity: 0;
+    transform: translateY(0.75rem);
+  }
+  #nav-index[data-open] .index-item {
+    animation: index-rise 500ms cubic-bezier(0.16, 1, 0.3, 1) both;
+    animation-delay: calc(var(--i) * 60ms);
+  }
+  @keyframes index-rise {
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+  #nav-index .index-item:hover .font-display {
+    color: var(--accent);
+  }
+
   @media (prefers-reduced-motion: reduce) {
-    nav a::after {
+    header nav a::after {
       transition: none;
+    }
+    #nav-index[data-open] .index-item {
+      animation: none;
+      opacity: 1;
+      transform: none;
     }
   }
 </style>
 
 <script>
-  const toggle = document.getElementById('theme-toggle');
+  // theme: one handler for every toggle (desktop row + mobile title block)
+  const toggles = document.querySelectorAll<HTMLButtonElement>('[data-theme-toggle]');
   const syncPressed = () => {
-    toggle?.setAttribute(
-      'aria-pressed',
-      String(document.documentElement.dataset.theme === 'dark'),
-    );
+    const pressed = String(document.documentElement.dataset.theme === 'dark');
+    toggles.forEach((el) => el.setAttribute('aria-pressed', pressed));
   };
   syncPressed();
-  toggle?.addEventListener('click', () => {
-    const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
-    document.documentElement.dataset.theme = next;
-    try {
-      localStorage.setItem('theme', next);
-    } catch {}
-    syncPressed();
+  toggles.forEach((el) =>
+    el.addEventListener('click', () => {
+      const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+      document.documentElement.dataset.theme = next;
+      try {
+        localStorage.setItem('theme', next);
+      } catch {}
+      syncPressed();
+    }),
+  );
+
+  // mobile index overlay
+  const overlay = document.getElementById('nav-index');
+  const openBtn = document.getElementById('nav-open');
+  const closeBtn = document.getElementById('nav-close');
+
+  const setOpen = (open: boolean) => {
+    if (!overlay || !openBtn) return;
+    if (open) {
+      overlay.dataset.open = '';
+    } else {
+      delete overlay.dataset.open;
+    }
+    overlay.classList.toggle('hidden', !open);
+    document.documentElement.classList.toggle('overflow-hidden', open);
+    openBtn.setAttribute('aria-expanded', String(open));
+    if (open) {
+      closeBtn?.focus();
+    } else {
+      openBtn.focus();
+    }
+  };
+
+  openBtn?.addEventListener('click', () => setOpen(true));
+  closeBtn?.addEventListener('click', () => setOpen(false));
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && overlay?.dataset.open !== undefined) setOpen(false);
   });
+  overlay?.querySelectorAll('a[href^="#"]').forEach((a) =>
+    a.addEventListener('click', () => setOpen(false)),
+  );
 </script>

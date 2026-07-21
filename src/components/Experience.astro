@@ -22,10 +22,7 @@ const t = useTranslations(lang);
             {String(i + 1).padStart(2, '0')}
           </span>
           <h3 class="font-display text-title text-balance">{item.title[lang]}</h3>
-          <div>
-            <p class="max-w-xl leading-relaxed text-muted">{item.body[lang]}</p>
-            <p class="label-mono mt-4 text-muted">{item.proof[lang]}</p>
-          </div>
+          <p class="label-mono max-w-xl pt-2 text-muted lg:pt-3">{item.proof[lang]}</p>
         </li>
       ))
     }
