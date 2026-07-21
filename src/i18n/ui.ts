@@ -53,7 +53,7 @@ export const ui = {
     'contact.body':
       'I like sinking my teeth into interesting frontend problems, architecture work and open-source collaboration.',
     'contact.cv': 'download CV (PDF)',
-    'contact.meta': 'remote or hybrid · Liberec / Prague · CZ / EN',
+    'contact.meta': 'open to new engagements · remote or hybrid · Liberec / Prague · CZ / EN',
     'contact.ctaLabel': 'btn / your-project',
     'contact.ctaNote': 'the next sketch could be yours',
     'footer.colophon': 'Set in Instrument Serif & JetBrains Mono. Built with Astro.',
@@ -104,7 +104,7 @@ export const ui = {
     'contact.title': 'Přineste mi tvrdý oříšek.',
     'contact.body': 'Rád se zakousnu do zajímavého frontend problému, architektury i open-source spolupráce.',
     'contact.cv': 'stáhnout životopis (PDF)',
-    'contact.meta': 'remote i hybrid · Liberec / Praha · CZ / EN',
+    'contact.meta': 'otevřený novým projektům · remote i hybrid · Liberec / Praha · CZ / EN',
     'contact.ctaLabel': 'btn / váš-projekt',
     'contact.ctaNote': 'další výkres může být váš',
     'footer.colophon': 'Vysazeno písmy Instrument Serif a JetBrains Mono. Postaveno na Astru.',
