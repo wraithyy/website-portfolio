@@ -3,7 +3,14 @@ import '@fontsource/instrument-serif';
 import '@fontsource/jetbrains-mono';
 import '@fontsource-variable/public-sans';
 import '../styles/global.css';
+import serifExtWoff2 from '@fontsource/instrument-serif/files/instrument-serif-latin-ext-400-normal.woff2?url';
+import serifWoff2 from '@fontsource/instrument-serif/files/instrument-serif-latin-400-normal.woff2?url';
+import monoExtWoff2 from '@fontsource/jetbrains-mono/files/jetbrains-mono-latin-ext-400-normal.woff2?url';
+import monoWoff2 from '@fontsource/jetbrains-mono/files/jetbrains-mono-latin-400-normal.woff2?url';
+import sansExtWoff2 from '@fontsource-variable/public-sans/files/public-sans-latin-ext-wght-normal.woff2?url';
+import sansWoff2 from '@fontsource-variable/public-sans/files/public-sans-latin-wght-normal.woff2?url';
 import { getAbsoluteLocaleUrl } from 'astro:i18n';
+import { email, github, linkedin } from '../data/site';
 import { type Lang, useTranslations } from '../i18n/ui';
 
 interface Props {
@@ -12,6 +19,12 @@ interface Props {
 
 const { lang } = Astro.props;
 const t = useTranslations(lang);
+
+// Czech glyphs (ě š č ř ž …) live in latin-ext — preload it only where it is used
+const fontPreloads =
+  lang === 'cs'
+    ? [serifWoff2, serifExtWoff2, monoWoff2, monoExtWoff2, sansWoff2, sansExtWoff2]
+    : [serifWoff2, monoWoff2, sansWoff2];
 ---
 
 <!doctype html>
@@ -32,6 +45,7 @@ const t = useTranslations(lang);
     <meta property="og:locale" content={lang === 'cs' ? 'cs_CZ' : 'en_US'} />
     <meta name="twitter:card" content="summary_large_image" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    {fontPreloads.map((href) => <link rel="preload" href={href} as="font" type="font/woff2" crossorigin />)}
     <script
       is:inline
       type="application/ld+json"
@@ -40,9 +54,9 @@ const t = useTranslations(lang);
         '@type': 'Person',
         name: 'Josef Kvapil',
         jobTitle: 'Frontend Architect',
-        email: 'mailto:josef0kvapil@gmail.com',
+        email: `mailto:${email}`,
         url: Astro.site?.toString(),
-        sameAs: ['https://github.com/wraithyy', 'https://www.linkedin.com/in/josef-kvapil'],
+        sameAs: [github, linkedin],
         worksFor: { '@type': 'Organization', name: 'Trask' },
         address: { '@type': 'PostalAddress', addressLocality: 'Liberec', addressCountry: 'CZ' },
       })}

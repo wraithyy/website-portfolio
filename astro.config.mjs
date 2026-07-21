@@ -14,6 +14,10 @@ export default defineConfig({
     },
   },
   integrations: [sitemap()],
+  build: {
+    // one small stylesheet — inlining it removes the only render-blocking request
+    inlineStylesheets: 'always',
+  },
   vite: {
     plugins: [tailwindcss()],
   },

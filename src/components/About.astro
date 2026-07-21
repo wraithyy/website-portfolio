@@ -8,7 +8,7 @@ interface Props {
 const { lang } = Astro.props;
 const t = useTranslations(lang);
 
-const stackGroups: Array<{ label: Record<Lang, string>; items: string; fade?: boolean }> = [
+const stackGroups: Array<{ label: Record<Lang, string>; items: string }> = [
   {
     label: { en: 'daily', cs: 'denně' },
     items: 'React · TypeScript · TanStack · Hono · Drizzle · Astro · MUI · Vite · Biome',
@@ -20,7 +20,6 @@ const stackGroups: Array<{ label: Record<Lang, string>; items: string; fade?: bo
   {
     label: { en: 'I find my way in', cs: 'zorientuju se v' },
     items: 'Rust · Java · C# · PHP · Angular · Vue · Kotlin · Go · Elixir · Gleam · Swift',
-    fade: true,
   },
 ];
 
@@ -57,7 +56,7 @@ const employers: Array<{ years: Record<Lang, string>; name: string; role: Record
 ];
 ---
 
-<section id="about" class="mx-auto max-w-6xl scroll-mt-12 px-(--spacing-gutter) py-(--spacing-section)">
+<section id="about" class="mx-auto max-w-6xl scroll-mt-20 px-(--spacing-gutter) py-(--spacing-section)">
   <div class="grid gap-10 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
     <div>
       <p class="label-mono text-accent">{t('about.label')}</p>
@@ -71,7 +70,7 @@ const employers: Array<{ years: Record<Lang, string>; name: string; role: Record
           stackGroups.map((group) => (
             <div class="grid gap-x-6 gap-y-0.5 sm:grid-cols-[7rem_minmax(0,1fr)]">
               <dt class="label-mono pt-0.5 text-muted">{group.label[lang]}</dt>
-              <dd class:list={['font-mono text-sm', group.fade && 'stack-fade']}>{group.items}</dd>
+              <dd class="font-mono text-sm">{group.items}</dd>
             </div>
           ))
         }
@@ -95,12 +94,3 @@ const employers: Array<{ years: Record<Lang, string>; name: string; role: Record
     </div>
   </div>
 </section>
-
-<style>
-  /* the list visibly trails off — there is more where that came from */
-  .stack-fade {
-    white-space: nowrap;
-    overflow: hidden;
-    mask-image: linear-gradient(to right, black 55%, transparent 98%);
-  }
-</style>

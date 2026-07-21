@@ -26,10 +26,13 @@ export const ui = {
     'story.headline': 'A button, built the way I build platforms.',
     'story.intro':
       'I architect and lead frontend platforms for banks and enterprises. Here is the foundation: six steps, in order, none skipped — on a button or a platform.',
+    'story.facts':
+      'Josef Kvapil · senior frontend architect · 10+ years · banking, insurance, energy · Liberec, CZ',
     'story.bridge': 'I can lead the big because I never skipped the small.',
     'story.bridgeMeta': 'architecture · leadership · React · TypeScript · TanStack',
     'story.btnSketch': 'btn / primary',
     'story.btnReal': 'Say hello',
+    'story.skip': 'skip',
 
     'exp.label': 'Capabilities',
     'exp.title': 'What I bring to a project.',
@@ -49,6 +52,10 @@ export const ui = {
     'contact.label': 'Contact',
     'contact.title': 'Say hello',
     'contact.body': 'Open to interesting frontend problems, architecture work and open-source collaboration.',
+    'contact.cv': 'download CV (PDF)',
+    'contact.meta': 'remote or hybrid · Liberec / Prague · CZ / EN',
+    'contact.ctaLabel': 'btn / your-project',
+    'contact.ctaNote': 'the next sketch could be yours',
     'footer.colophon': 'Set in Instrument Serif & JetBrains Mono. Built with Astro.',
   },
   cs: {
@@ -69,10 +76,13 @@ export const ui = {
     'story.headline': 'Tlačítko postavené stejně, jako stavím platformy.',
     'story.intro':
       'Navrhuju a vedu frontend platformy pro banky a enterprise. Tady jsou základy: šest kroků, popořadě, žádný se nepřeskakuje — u tlačítka ani u platformy.',
+    'story.facts':
+      'Josef Kvapil · senior frontend architekt · 10+ let · bankovnictví, pojišťovnictví, energetika · Liberec',
     'story.bridge': 'Velké věci zvládnu vést, protože jsem nikdy nepřeskočil ty malé.',
     'story.bridgeMeta': 'architektura · leadership · React · TypeScript · TanStack',
     'story.btnSketch': 'btn / primary',
     'story.btnReal': 'Ozvěte se',
+    'story.skip': 'přeskočit',
 
     'exp.label': 'Co umím',
     'exp.title': 'Co do projektu přináším.',
@@ -92,6 +102,10 @@ export const ui = {
     'contact.label': 'Kontakt',
     'contact.title': 'Ozvěte se',
     'contact.body': 'Rád se zakousnu do zajímavého frontend problému, architektury i open-source spolupráce.',
+    'contact.cv': 'životopis (PDF)',
+    'contact.meta': 'remote i hybrid · Liberec / Praha · CZ / EN',
+    'contact.ctaLabel': 'btn / váš-projekt',
+    'contact.ctaNote': 'další výkres může být váš',
     'footer.colophon': 'Vysazeno písmy Instrument Serif a JetBrains Mono. Postaveno na Astru.',
   },
 } as const satisfies Record<Lang, Record<string, string>>;

@@ -67,6 +67,16 @@ body {
   transition: background-color 200ms ease, color 200ms ease;
 }
 
+:root {
+  /* slim fixed brand strip height — consumed by Header (bar) and StoryHero
+     (sticky offsets + snap math) so the three can never desync */
+  --brandbar-h: 2.75rem;
+}
+
+p {
+  text-wrap: pretty;
+}
+
 ::selection {
   background-color: var(--accent);
   color: var(--paper);

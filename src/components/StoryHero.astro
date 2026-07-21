@@ -1,4 +1,5 @@
 ---
+import { email } from '../data/site';
 import { storySteps } from '../data/story';
 import { type Lang, useTranslations } from '../i18n/ui';
 
@@ -19,19 +20,26 @@ const t = useTranslations(lang);
       </h1>
     </div>
     <p class="rise rise-3 mt-8 max-w-lg text-lg leading-relaxed text-muted">{t('story.intro')}</p>
+    <p class="rise rise-4 label-mono mt-8 text-muted">{t('story.facts')}</p>
   </section>
 
   <div class="grid lg:grid-cols-2 lg:gap-16">
     <!-- Sticky stage -->
     <div
-      class="sticky top-0 z-10 -mx-(--spacing-gutter) border-b border-hairline bg-paper px-(--spacing-gutter) lg:static lg:mx-0 lg:border-b-0 lg:bg-transparent lg:px-0"
+      class="sticky top-(--brandbar-h) z-10 -mx-(--spacing-gutter) border-b border-hairline bg-paper px-(--spacing-gutter) lg:static lg:mx-0 lg:border-b-0 lg:bg-transparent lg:px-0"
     >
       <div
         id="stage"
         data-stage="1"
-        class="sticky top-0 flex min-h-56 flex-col items-center justify-center py-8 lg:top-[33vh] lg:min-h-72 lg:py-0"
+        class="relative sticky top-(--brandbar-h) flex min-h-56 flex-col items-center justify-center py-8 lg:top-[33vh] lg:min-h-72 lg:py-0"
       >
-        <div class="btn-slot relative grid place-items-center">
+        <a
+          href="#experience"
+          class="label-mono absolute right-0 bottom-3 text-muted transition-colors hover:text-accent lg:hidden"
+        >
+          {t('story.skip')} <span aria-hidden="true">↓</span>
+        </a>
+        <div class="btn-slot relative grid min-h-14 min-w-48 place-items-center will-change-transform">
           <!-- Living blueprint: drafting annotations that redraw per stage and clean up on ship -->
           <svg
             class="blueprint pointer-events-none absolute"
@@ -89,7 +97,7 @@ const t = useTranslations(lang);
             <span class="lbl lbl-sketch normal-case">{t('story.btnSketch')}</span>
             <span class="lbl lbl-real">{t('story.btnReal')}</span>
           </button>
-          <a class="btn real-btn" href="mailto:josef0kvapil@gmail.com">{t('story.btnReal')}</a>
+          <a class="btn real-btn" href={`mailto:${email}`}>{t('story.btnReal')}</a>
           <span class="ghost-cursor" aria-hidden="true">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="var(--ink)" stroke="var(--paper)" stroke-width="1.5">
               <path d="M5 3l14 8-6.5 1.5L9 19z"></path>
@@ -136,7 +144,7 @@ const t = useTranslations(lang);
 </div>
 
 <!-- The shipped button stays deployed: follows the visitor after the story ends -->
-<a id="floating-cta" href="mailto:josef0kvapil@gmail.com" class="label-mono" aria-hidden="true" tabindex="-1">
+<a id="floating-cta" href={`mailto:${email}`} class="label-mono" aria-hidden="true" tabindex="-1">
   {t('story.btnReal')}
 </a>
 
@@ -149,6 +157,9 @@ const t = useTranslations(lang);
   }
   .rise-3 {
     animation-delay: 260ms;
+  }
+  .rise-4 {
+    animation-delay: 380ms;
   }
   @keyframes rise {
     from {
@@ -164,11 +175,6 @@ const t = useTranslations(lang);
     .rise {
       animation: none;
     }
-  }
-
-  .btn-slot {
-    min-height: 3.5rem;
-    min-width: 12rem;
   }
 
   .btn {
@@ -211,9 +217,6 @@ const t = useTranslations(lang);
     50% {
       scale: 1.008;
     }
-  }
-  .btn-slot {
-    will-change: transform;
   }
   @media (prefers-reduced-motion: reduce) {
     .demo-btn {
@@ -383,6 +386,18 @@ const t = useTranslations(lang);
       width: min(380px, 94vw);
       height: auto;
     }
+    /* story is a stepper on mobile: snap-type itself is applied by the
+       script ONLY while the steps fill the view (y mandatory), so flicks
+       brake at each step yet the page edges stay completely free */
+    section[data-step] {
+      scroll-snap-align: start;
+      scroll-snap-stop: always;
+      scroll-margin-top: var(--stage-height, 17.5rem);
+    }
+    /* the bridge is the last stop; past it the page scrolls free */
+    #story-bridge {
+      scroll-snap-align: start;
+    }
   }
 
   #floating-cta {
@@ -461,6 +476,68 @@ const t = useTranslations(lang);
   const steps = document.querySelectorAll<HTMLElement>('[data-step]');
   const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
+  // snap target offset = brand strip (--brandbar-h token + 1px border)
+  // + sticky stage bar; the strip is always shown once the story is on screen
+  const brandbarHeight = () =>
+    parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--brandbar-h')) * 16 +
+    1;
+  const setStageHeight = () => {
+    document.documentElement.style.setProperty(
+      '--stage-height',
+      `${brandbarHeight() + Math.ceil(stage.getBoundingClientRect().height) + 1}px`,
+    );
+  };
+  setStageHeight();
+  window.addEventListener('resize', setStageHeight);
+
+  // hard stepping only INSIDE the story: JS applies `y mandatory` while the
+  // visitor is between the first and the last step and releases it just past
+  // either edge (mid-gesture), so every step snaps but nothing ever traps
+  const firstStep = steps[0];
+  const lastStep = steps[steps.length - 1];
+  // anchor navigation scrolls smoothly THROUGH the story — snap-stop would
+  // arrest it mid-way, so snapping pauses until that scroll finishes
+  let suppressUntil = 0;
+  document.addEventListener('click', (e) => {
+    if (e.target instanceof Element && e.target.closest('a[href*="#"]')) {
+      suppressUntil = Date.now() + 1500;
+      syncSnap();
+    }
+  });
+  // browsers without `scrollend` (older Safari) fall back to the timeout
+  window.addEventListener('scrollend', () => {
+    if (suppressUntil) suppressUntil = 0;
+  });
+  const syncSnap = () => {
+    const html = document.documentElement;
+    if (Date.now() < suppressUntil) {
+      html.style.scrollSnapType = 'none';
+      return;
+    }
+    // forced scroll-stepping is motion too — respect the OS preference
+    if (reduced || !firstStep || !lastStep || !matchMedia('(max-width: 1023px)').matches) {
+      html.style.scrollSnapType = '';
+      return;
+    }
+    const offset = parseFloat(getComputedStyle(firstStep).scrollMarginTop) || 280;
+    const firstTop = firstStep.getBoundingClientRect().top - offset;
+    const lastTop = lastStep.getBoundingClientRect().top - offset;
+    const inStory = firstTop < 100 && lastTop > -8;
+    html.style.scrollSnapType = inStory ? 'y mandatory' : '';
+  };
+  // layout reads batched to one per frame
+  let snapRaf = 0;
+  const scheduleSyncSnap = () => {
+    if (snapRaf) return;
+    snapRaf = requestAnimationFrame(() => {
+      snapRaf = 0;
+      syncSnap();
+    });
+  };
+  syncSnap();
+  window.addEventListener('scroll', scheduleSyncSnap, { passive: true });
+  window.addEventListener('resize', scheduleSyncSnap);
+
   if (reduced) {
     stage.dataset.stage = '6';
   } else {
@@ -472,7 +549,10 @@ const t = useTranslations(lang);
           }
         }
       },
-      { rootMargin: '-40% 0px -40% 0px' },
+      // a thin 2% line instead of a wide band: only ONE step can straddle it,
+      // so the active stage can never be dragged ahead by the next step.
+      // At 50% it clears header+stage (~280px) even on a 568px viewport.
+      { rootMargin: '-50% 0px -48% 0px' },
     );
     steps.forEach((s) => io.observe(s));
   }
@@ -522,16 +602,26 @@ const t = useTranslations(lang);
         raf = 0;
       }
     };
+    // rect measured once per frame, not per pointer event
+    let pointerRaf = 0;
+    let px = 0;
+    let py = 0;
     window.addEventListener('pointermove', (e) => {
-      const r = slot.getBoundingClientRect();
-      const dx = e.clientX - (r.left + r.width / 2);
-      const dy = e.clientY - (r.top + r.height / 2);
-      const dist = Math.hypot(dx, dy);
-      const reach = 180;
-      const pull = dist < reach ? (1 - dist / reach) * 3 : 0;
-      targetX = (dx / (dist || 1)) * pull;
-      targetY = (dy / (dist || 1)) * pull;
-      if (!raf) raf = requestAnimationFrame(settle);
+      px = e.clientX;
+      py = e.clientY;
+      if (pointerRaf) return;
+      pointerRaf = requestAnimationFrame(() => {
+        pointerRaf = 0;
+        const r = slot.getBoundingClientRect();
+        const dx = px - (r.left + r.width / 2);
+        const dy = py - (r.top + r.height / 2);
+        const dist = Math.hypot(dx, dy);
+        const reach = 180;
+        const pull = dist < reach ? (1 - dist / reach) * 3 : 0;
+        targetX = (dx / (dist || 1)) * pull;
+        targetY = (dy / (dist || 1)) * pull;
+        if (!raf) raf = requestAnimationFrame(settle);
+      });
     });
   }
 </script>

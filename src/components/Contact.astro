@@ -1,4 +1,5 @@
 ---
+import { email, github, linkedin } from '../data/site';
 import { type Lang, useTranslations } from '../i18n/ui';
 
 interface Props {
@@ -9,13 +10,14 @@ const { lang } = Astro.props;
 const t = useTranslations(lang);
 
 const links = [
-  { label: 'GitHub', href: 'https://github.com/wraithyy', handle: '@wraithyy' },
-  { label: 'Email', href: 'mailto:josef0kvapil@gmail.com', handle: 'josef0kvapil@gmail.com' },
-  { label: 'LinkedIn', href: 'https://www.linkedin.com/in/josef-kvapil', handle: 'josef-kvapil' },
+  { label: 'GitHub', href: github, handle: '@wraithyy' },
+  { label: 'Email', href: `mailto:${email}`, handle: email },
+  { label: 'LinkedIn', href: linkedin, handle: 'josef-kvapil' },
+  { label: 'CV', href: '/cv-josef-kvapil.pdf', handle: t('contact.cv') },
 ];
 ---
 
-<section id="contact" class="mx-auto max-w-6xl scroll-mt-12 px-(--spacing-gutter) py-(--spacing-section)">
+<section id="contact" class="mx-auto max-w-6xl scroll-mt-20 px-(--spacing-gutter) py-(--spacing-section)">
   <p class="label-mono text-accent">{t('contact.label')}</p>
   <h2 class="mt-4 font-display text-title">{t('contact.title')}</h2>
   <p class="mt-6 max-w-md text-lg leading-relaxed text-muted">{t('contact.body')}</p>
@@ -38,39 +40,16 @@ const links = [
       ))
     }
   </ul>
+  <p class="label-mono mt-5 text-muted">{t('contact.meta')}</p>
 
   <!-- The closing loop: the next sketch is the visitor's project -->
   <div class="mt-20 text-center">
     <a
-      href="mailto:josef0kvapil@gmail.com"
-      class="next-sketch label-mono inline-flex min-h-11 items-center px-8 normal-case"
+      href={`mailto:${email}`}
+      class="label-mono inline-flex min-h-11 items-center border-[1.5px] border-dashed border-accent px-8 text-accent normal-case transition-colors hover:border-solid hover:bg-accent hover:text-paper focus-visible:border-solid focus-visible:bg-accent focus-visible:text-paper active:translate-y-px"
     >
-      btn / {lang === 'cs' ? 'váš-projekt' : 'your-project'}
+      {t('contact.ctaLabel')}
     </a>
-    <p class="label-mono mt-4 text-muted">
-      {lang === 'cs' ? 'další výkres může být váš' : 'the next sketch could be yours'}
-    </p>
+    <p class="label-mono mt-4 text-muted">{t('contact.ctaNote')}</p>
   </div>
 </section>
-
-<style>
-  .next-sketch {
-    border: 1.5px dashed var(--accent);
-    color: var(--accent);
-    transition:
-      border-color 250ms ease,
-      border-style 250ms ease,
-      color 250ms ease,
-      background-color 250ms ease;
-  }
-  .next-sketch:hover,
-  .next-sketch:focus-visible {
-    border-style: solid;
-    border-color: var(--accent);
-    background: var(--accent);
-    color: var(--paper);
-  }
-  .next-sketch:active {
-    transform: translateY(1px);
-  }
-</style>
