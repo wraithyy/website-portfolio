@@ -1,0 +1,26 @@
+---
+/**
+ * JK monogram — five bars redrawn from the original mark (path30.svg),
+ * sharp-edged and aligned to shared top/bottom edges to match the site's
+ * blueprint language. Bars inherit currentColor; the third carries the accent.
+ */
+interface Props {
+  class?: string;
+}
+
+const { class: className } = Astro.props;
+---
+
+<svg
+  viewBox="0 0 132 168"
+  class={className}
+  fill="currentColor"
+  aria-hidden="true"
+  focusable="false"
+>
+  <rect x="0" y="89" width="25" height="79"></rect>
+  <rect x="36" y="0" width="25" height="168"></rect>
+  <rect x="71" y="0" width="25" height="168" fill="var(--accent)"></rect>
+  <rect x="107" y="0" width="25" height="79"></rect>
+  <rect x="107" y="89" width="25" height="79"></rect>
+</svg>

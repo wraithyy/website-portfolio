@@ -1,5 +1,20 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <rect width="64" height="64" fill="#faf8f4"/>
-  <rect x="6.5" y="18.5" width="51" height="27" fill="none" stroke="#c93a20" stroke-width="3" stroke-dasharray="6 4"/>
-  <text x="32" y="37.5" text-anchor="middle" dominant-baseline="middle" font-family="ui-monospace, monospace" font-size="17" font-weight="700" fill="#1a1815">JK</text>
+  <style>
+    .bg { fill: #faf8f4; }
+    .bar { fill: #1a1815; }
+    .accent { fill: #c93a20; }
+    @media (prefers-color-scheme: dark) {
+      .bg { fill: #121110; }
+      .bar { fill: #e8e4dc; }
+      .accent { fill: #ff5a3c; }
+    }
+  </style>
+  <rect class="bg" width="64" height="64"/>
+  <g transform="translate(9 3) scale(0.35)">
+    <rect class="bar" x="0" y="89" width="25" height="79"/>
+    <rect class="bar" x="36" y="0" width="25" height="168"/>
+    <rect class="accent" x="71" y="0" width="25" height="168"/>
+    <rect class="bar" x="107" y="0" width="25" height="79"/>
+    <rect class="bar" x="107" y="89" width="25" height="79"/>
+  </g>
 </svg>

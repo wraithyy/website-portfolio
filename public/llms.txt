@@ -1,6 +1,6 @@
 # Josef Kvapil
 
-> Frontend architect and team lead in Prague, Czech Republic. Architects React
+> Frontend architect and team lead in Liberec, Czech Republic. Architects React
 > and TypeScript platforms for banking, energy and insurance at Trask; builds
 > open-source tooling that keeps frontend code honest. AI-assisted development
 > practitioner since the GitHub Copilot closed beta — enthusiastic precisely

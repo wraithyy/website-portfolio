@@ -1,5 +1,6 @@
 ---
 import { type Lang, useTranslations } from '../i18n/ui';
+import Logo from './Logo.astro';
 
 interface Props {
   lang: Lang;
@@ -11,10 +12,14 @@ const langTarget = lang === 'en' ? '/cs/' : '/';
 ---
 
 <header
-  class="mx-auto flex max-w-6xl items-baseline justify-between gap-6 px-(--spacing-gutter) py-6"
+  class="mx-auto flex max-w-6xl items-center justify-between gap-6 px-(--spacing-gutter) py-6"
 >
-  <a href={lang === 'en' ? '/' : '/cs/'} class="label-mono text-ink no-underline whitespace-nowrap">
-    Josef Kvapil
+  <a
+    href={lang === 'en' ? '/' : '/cs/'}
+    class="flex items-center gap-3 text-ink no-underline whitespace-nowrap"
+  >
+    <Logo class="h-7 w-auto" />
+    <span class="font-display text-2xl leading-none">Josef Kvapil</span>
   </a>
   <nav class="flex flex-wrap items-baseline justify-end gap-x-5 gap-y-2 sm:gap-x-8" aria-label="Main">
     <a href="#experience" class="label-mono hidden text-muted transition-colors hover:text-accent sm:inline">

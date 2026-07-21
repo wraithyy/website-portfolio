@@ -20,10 +20,10 @@ export const ui = {
     'nav.themeToggle': 'Toggle dark mode',
     'nav.langSwitch': 'Česky',
 
-    'story.kicker': 'Frontend architect — Prague',
+    'story.kicker': 'Frontend architect — Liberec',
     'story.headline': 'A button, built the way I build platforms.',
     'story.intro':
-      'I architect and lead frontend platforms for banks and enterprises. This is the foundation it all stands on: six steps, in the exact order they have to happen. No step skipped — not on a button, not on a platform.',
+      'I architect and lead frontend platforms for banks and enterprises. Here is the foundation: six steps, in order, none skipped — on a button or a platform.',
     'story.bridge': 'I can lead the big because I never skipped the small.',
     'story.bridgeMeta': 'architecture · leadership · React · TypeScript · TanStack',
     'story.btnSketch': 'btn / primary',
@@ -38,9 +38,9 @@ export const ui = {
     'about.label': 'About',
     'about.title': 'I dig into how things work underneath.',
     'about.bio':
-      'I wrote my first PHP website in sixth grade and never stopped. Today that curiosity means React core, deep TanStack, Hono and Astro where they earn their place — reading the internals, not just the docs — and a seat on a train to the next conference. I love cutting-edge tech and I know exactly when a project needs something proven and stable instead.',
+      'I wrote my first PHP website in sixth grade and never stopped. Today that means React and TanStack down to the internals, a train seat to the next conference — and knowing exactly when a project needs proven and stable instead of cutting-edge.',
     'about.ai':
-      'I have been into AI-assisted development since the GitHub Copilot closed beta, long before it was a roadmap item. Today I run an AI-first workflow, build my own agent tooling and give internal talks on using it well. My stance: AI is a powerful assistant that still needs an experienced engineer to guide it — and to know when not to trust it. Enthusiastic precisely because I know its limits. Vibecoding is not engineering.',
+      'AI-assisted since the GitHub Copilot closed beta. Today: an AI-first workflow, my own agent tooling, internal talks. The rule is simple — AI drafts, an engineer signs. Vibecoding is not engineering.',
     'about.stackLabel': 'Stack',
     'about.polyglot':
       'A new language is not a barrier — I find my way around an unfamiliar codebase fast, whatever it is written in.',
@@ -65,10 +65,10 @@ export const ui = {
     'nav.themeToggle': 'Přepnout tmavý režim',
     'nav.langSwitch': 'English',
 
-    'story.kicker': 'Frontend architekt — Praha',
+    'story.kicker': 'Frontend architekt — Liberec',
     'story.headline': 'Tlačítko postavené stejně, jako stavím platformy.',
     'story.intro':
-      'Navrhuju architekturu a vedu frontend platformy pro banky a enterprise. Tohle jsou základy, na kterých to celé stojí: šest kroků, přesně v tom pořadí, v jakém musí přijít. Žádný krok se nepřeskakuje — u tlačítka ani u platformy.',
+      'Navrhuju a vedu frontend platformy pro banky a enterprise. Tady jsou základy: šest kroků, popořadě, žádný se nepřeskakuje — u tlačítka ani u platformy.',
     'story.bridge': 'Velké věci zvládnu vést, protože jsem nikdy nepřeskočil ty malé.',
     'story.bridgeMeta': 'architektura · leadership · React · TypeScript · TanStack',
     'story.btnSketch': 'btn / primary',
@@ -83,9 +83,9 @@ export const ui = {
     'about.label': 'O mně',
     'about.title': 'Zajímá mě, jak věci fungují uvnitř.',
     'about.bio':
-      'První web jsem v PHP napsal v šesté třídě a od té doby jsem nepřestal. Dnes ta zvědavost znamená React až po core, TanStack do hloubky, Hono a Astro tam, kde dávají smysl — číst zdrojáky, ne jen dokumentaci — a místenku na vlak na další konferenci. Miluju nejnovější technologie a přesně vím, kdy projekt místo nich potřebuje něco prověřeného a stabilního.',
+      'První web jsem v PHP napsal v šesté třídě a nepřestal. Dnes to znamená React a TanStack až do zdrojáků, místenku na vlak na další konferenci — a přesnou znalost toho, kdy projekt potřebuje raději prověřené a stabilní než cutting-edge.',
     'about.ai':
-      'AI-assisted vývoj používám od closed bety GitHub Copilotu — dávno předtím, než to začal řešit každý. Dnes jedu AI-first workflow, stavím vlastní agent tooling a dělám interní přednášky o tom, jak s tím pracovat pořádně. Můj postoj: AI je silný pomocník, který pořád potřebuje zkušeného inženýra — a vědět, kdy mu nevěřit. Nadšený jsem právě proto, že znám jeho limity. Vibecoding není inženýrství.',
+      'AI-assisted vývoj od closed bety GitHub Copilotu. Dnes: AI-first workflow, vlastní agent tooling, interní přednášky. Pravidlo je prosté — AI draftuje, inženýr podepisuje. Vibecoding není inženýrství.',
     'about.stackLabel': 'Stack',
     'about.polyglot':
       'Nový jazyk pro mě není bariéra — v cizí codebase se zorientuju rychle, ať je napsaná v čemkoli.',

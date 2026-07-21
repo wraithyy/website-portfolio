@@ -109,7 +109,7 @@ const t = useTranslations(lang);
         storySteps.map((step, i) => (
           <section
             data-step={i + 1}
-            class={`flex min-h-[44vh] flex-col justify-center py-10 ${i < storySteps.length - 1 ? 'border-b border-hairline' : ''}`}
+            class={`flex min-h-[30vh] flex-col justify-center py-10 lg:min-h-[44vh] ${i < storySteps.length - 1 ? 'border-b border-hairline' : ''}`}
           >
             <p class="label-mono text-accent">{step.label[lang]}</p>
             <h2 class="mt-4 font-display text-title">{step.title[lang]}</h2>
@@ -370,6 +370,19 @@ const t = useTranslations(lang);
     .blueprint .guide,
     .bp-label {
       transition: none;
+    }
+  }
+  /* mobile: fewer drafting beats — easing curve and focus-offset annotations
+     are illegible on a narrow sticky stage, so stages 3-4 pass without them */
+  @media (max-width: 1023px) {
+    .bp-3,
+    .bp-4 {
+      display: none;
+    }
+    /* the 380px annotation canvas must never widen a narrow viewport */
+    .blueprint {
+      width: min(380px, 94vw);
+      height: auto;
     }
   }
 
