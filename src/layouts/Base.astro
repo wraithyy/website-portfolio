@@ -88,6 +88,16 @@ const fontPreloads =
         document.documentElement.dataset.theme = theme;
       })();
     </script>
+    {
+      import.meta.env.PROD && (
+        <script
+          is:inline
+          type="module"
+          src="https://static.cloudflareinsights.com/beacon.min.js"
+          data-cf-beacon='{"token": "957b5f60eecf4e2f997b551464b1b33f"}'
+        />
+      )
+    }
   </head>
   <body>
     <a
