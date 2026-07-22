@@ -1,0 +1,487 @@
+<title>Josef Kvapil — Design manual</title>
+<style>
+  :root {
+    --paper: #faf8f4;
+    --ink: #1a1815;
+    --muted: #6b6660;
+    --accent: #c93a20;
+    --hairline: #dedad2;
+    --surface: #f2efe9;
+    --font-display: 'Instrument Serif', Georgia, 'Times New Roman', serif;
+    --font-sans: 'Public Sans', -apple-system, 'Segoe UI', system-ui, sans-serif;
+    --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper: #121110;
+      --ink: #e8e4dc;
+      --muted: #918c84;
+      --accent: #ff5a3c;
+      --hairline: #363330;
+      --surface: #1a1917;
+    }
+  }
+  :root[data-theme="light"] {
+    --paper: #faf8f4;
+    --ink: #1a1815;
+    --muted: #6b6660;
+    --accent: #c93a20;
+    --hairline: #dedad2;
+    --surface: #f2efe9;
+  }
+  :root[data-theme="dark"] {
+    --paper: #121110;
+    --ink: #e8e4dc;
+    --muted: #918c84;
+    --accent: #ff5a3c;
+    --hairline: #363330;
+    --surface: #1a1917;
+  }
+
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--font-sans);
+    line-height: 1.6;
+    margin: 0;
+  }
+  main {
+    max-width: 68rem;
+    margin: 0 auto;
+    padding: 0 clamp(1.25rem, 4vw, 3rem) 6rem;
+  }
+  .label {
+    font-family: var(--font-mono);
+    font-size: 0.8125rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .label--accent { color: var(--accent); }
+  h1 {
+    font-family: var(--font-display);
+    font-weight: 400;
+    font-size: clamp(2.75rem, 7vw, 5rem);
+    line-height: 1.02;
+    letter-spacing: -0.02em;
+    margin: 0.5rem 0 0;
+    text-wrap: balance;
+  }
+  h2 {
+    font-family: var(--font-display);
+    font-weight: 400;
+    font-size: clamp(1.75rem, 4vw, 2.5rem);
+    line-height: 1.1;
+    letter-spacing: -0.01em;
+    margin: 0 0 1.5rem;
+  }
+  h3 {
+    font-size: 1rem;
+    font-weight: 600;
+    margin: 0 0 0.75rem;
+  }
+  p { max-width: 42rem; margin: 0 0 1rem; }
+  section {
+    border-top: 1px solid var(--hairline);
+    padding-top: 2.5rem;
+    margin-top: 4rem;
+  }
+  section > .label { display: block; margin-bottom: 0.75rem; }
+
+  header.page {
+    padding: 5rem 0 4rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+  header.page svg.mark { height: 4.5rem; width: auto; }
+  .meta {
+    display: flex;
+    gap: 2rem;
+    flex-wrap: wrap;
+    margin-top: 1rem;
+  }
+
+  .grid {
+    display: grid;
+    gap: 1.5rem;
+    grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  }
+  .tile {
+    border: 1px solid var(--hairline);
+    display: flex;
+    flex-direction: column;
+  }
+  .tile .stage {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2.5rem 1.5rem;
+    min-height: 9rem;
+  }
+  .tile .caption {
+    border-top: 1px solid var(--hairline);
+    padding: 0.75rem 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+  }
+  .caption .file { font-family: var(--font-mono); font-size: 0.75rem; color: var(--muted); }
+  .caption .name { font-size: 0.875rem; font-weight: 600; }
+
+  .stage--paper  { background: #faf8f4; }
+  .stage--dark   { background: #121110; }
+  .stage--accent { background: #c93a20; }
+  .stage--surface { background: var(--surface); }
+
+  .swatches {
+    display: grid;
+    gap: 1.5rem;
+    grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+  }
+  .swatch { border: 1px solid var(--hairline); }
+  .swatch .chip { height: 6rem; }
+  .swatch dl {
+    margin: 0;
+    padding: 0.85rem 1rem;
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 0.2rem 1rem;
+    border-top: 1px solid var(--hairline);
+  }
+  .swatch dt { color: var(--muted); }
+  .swatch dd { margin: 0; }
+  .swatch .name {
+    padding: 0.6rem 1rem 0;
+    font-weight: 600;
+    font-size: 0.875rem;
+  }
+
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    font-size: 0.875rem;
+  }
+  .table-wrap { overflow-x: auto; }
+  th, td {
+    text-align: left;
+    padding: 0.6rem 1rem 0.6rem 0;
+    border-bottom: 1px solid var(--hairline);
+    vertical-align: top;
+  }
+  th { font-family: var(--font-mono); font-size: 0.75rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); font-weight: 500; }
+  td.mono { font-family: var(--font-mono); font-size: 0.8125rem; white-space: nowrap; }
+
+  .rules { display: grid; gap: 1.5rem; grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr)); }
+  .rules ul { margin: 0; padding-left: 1.1rem; }
+  .rules li { margin-bottom: 0.5rem; max-width: 34rem; }
+  .rules .do-head { color: var(--accent); }
+
+  .type-specimen { border: 1px solid var(--hairline); padding: 1.5rem; margin-bottom: 1.5rem; }
+  .type-specimen .sample { margin: 0.5rem 0 1rem; }
+
+  .clearspace-figure {
+    border: 1px solid var(--hairline);
+    background: var(--surface);
+    padding: 3rem;
+    display: flex;
+    justify-content: center;
+  }
+
+  .card-figure {
+    display: grid;
+    gap: 1.5rem;
+    grid-template-columns: repeat(auto-fit, minmax(19rem, 1fr));
+  }
+  .bizcard {
+    aspect-ratio: 85 / 55;
+    border: 1px solid var(--hairline);
+    box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+    padding: 1.4rem 1.6rem;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+  }
+  .bizcard--front { background: #faf8f4; color: #1a1815; }
+  .bizcard--back  { background: #121110; color: #e8e4dc; display: flex; align-items: center; justify-content: center; }
+  .bizcard .who .n { font-family: var(--font-display); font-size: 1.5rem; line-height: 1.05; }
+  .bizcard .who .r { font-family: var(--font-mono); font-size: 0.6rem; letter-spacing: 0.08em; text-transform: uppercase; color: #6b6660; margin-top: 0.35rem; }
+  .bizcard .contact { font-family: var(--font-mono); font-size: 0.6rem; line-height: 1.7; color: #1a1815; }
+  .figcap { font-size: 0.8125rem; color: var(--muted); margin-top: 0.5rem; }
+
+  footer {
+    border-top: 1px solid var(--hairline);
+    margin-top: 5rem;
+    padding-top: 1.5rem;
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: var(--muted);
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+  }
+</style>
+
+<main>
+  <header class="page">
+    <svg class="mark" viewBox="0 0 132 168" fill="currentColor" aria-hidden="true">
+      <rect x="0" y="89" width="25" height="79"></rect>
+      <rect x="36" y="0" width="25" height="168"></rect>
+      <rect x="71" y="0" width="25" height="168" fill="var(--accent)"></rect>
+      <rect x="107" y="0" width="25" height="79"></rect>
+      <rect x="107" y="89" width="25" height="79"></rect>
+    </svg>
+    <div>
+      <span class="label label--accent">Design manual · v1.0</span>
+      <h1>Josef Kvapil</h1>
+    </div>
+    <p>Vizuální identita: technický editorial — švýcarská typografie, papírové pozadí,
+    vermilion akcent, mono popisky. Tichá plocha, jeden silný akcent. Žádné karty,
+    žádné stíny, žádné gradienty.</p>
+    <div class="meta">
+      <span class="label">jkvapil.cz</span>
+      <span class="label">2026</span>
+      <span class="label">zdroj tokenů: src/styles/global.css</span>
+    </div>
+  </header>
+
+  <section>
+    <span class="label">01 · Značka</span>
+    <h2>Monogram JK</h2>
+    <p>Pět svislých pruhů tvoří ligaturu J + K. Konstrukce: pruh 25 j., mezera 11 j.,
+    výška 168 j., zářez v pravém sloupci 10 j. Třetí pruh nese akcent — jediné barevné
+    místo značky. Vždy vkládejte z SVG souborů, nikdy nepřekreslujte.</p>
+
+    <div class="grid">
+      <div class="tile">
+        <div class="stage stage--paper">
+          <svg height="72" viewBox="0 0 132 168" fill="#1A1815"><rect x="0" y="89" width="25" height="79"></rect><rect x="36" y="0" width="25" height="168"></rect><rect x="71" y="0" width="25" height="168" fill="#C93A20"></rect><rect x="107" y="0" width="25" height="79"></rect><rect x="107" y="89" width="25" height="79"></rect></svg>
+        </div>
+        <div class="caption"><span class="name">Primární — světlé pozadí</span><span class="file">logo-symbol.svg</span></div>
+      </div>
+      <div class="tile">
+        <div class="stage stage--dark">
+          <svg height="72" viewBox="0 0 132 168" fill="#E8E4DC"><rect x="0" y="89" width="25" height="79"></rect><rect x="36" y="0" width="25" height="168"></rect><rect x="71" y="0" width="25" height="168" fill="#FF5A3C"></rect><rect x="107" y="0" width="25" height="79"></rect><rect x="107" y="89" width="25" height="79"></rect></svg>
+        </div>
+        <div class="caption"><span class="name">Primární — tmavé pozadí</span><span class="file">logo-symbol-dark.svg</span></div>
+      </div>
+      <div class="tile">
+        <div class="stage stage--paper">
+          <svg height="72" viewBox="0 0 132 168" fill="#1A1815"><rect x="0" y="89" width="25" height="79"></rect><rect x="36" y="0" width="25" height="168"></rect><rect x="71" y="0" width="25" height="168"></rect><rect x="107" y="0" width="25" height="79"></rect><rect x="107" y="89" width="25" height="79"></rect></svg>
+        </div>
+        <div class="caption"><span class="name">Mono ink — jednobarevný tisk</span><span class="file">logo-symbol-black.svg</span></div>
+      </div>
+      <div class="tile">
+        <div class="stage stage--accent">
+          <svg height="72" viewBox="0 0 132 168" fill="#FAF8F4"><rect x="0" y="89" width="25" height="79"></rect><rect x="36" y="0" width="25" height="168"></rect><rect x="71" y="0" width="25" height="168"></rect><rect x="107" y="0" width="25" height="79"></rect><rect x="107" y="89" width="25" height="79"></rect></svg>
+        </div>
+        <div class="caption"><span class="name">Inverzní — tmavé / akcentové plochy</span><span class="file">logo-symbol-white.svg</span></div>
+      </div>
+      <div class="tile">
+        <div class="stage stage--paper">
+          <svg height="72" viewBox="0 0 132 168" fill="#C93A20"><rect x="0" y="89" width="25" height="79"></rect><rect x="36" y="0" width="25" height="168"></rect><rect x="71" y="0" width="25" height="168"></rect><rect x="107" y="0" width="25" height="79"></rect><rect x="107" y="89" width="25" height="79"></rect></svg>
+        </div>
+        <div class="caption"><span class="name">Akcentová — razítko, pečeť, detail</span><span class="file">logo-symbol-accent.svg</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <span class="label">02 · Lockupy</span>
+    <h2>Logo s wordmarkem</h2>
+    <p>Horizontální lockup je výchozí „jednořádkové" logo — hlavičky, patičky, vizitky,
+    podpisy v e-mailu. Stacked verze pro čtvercové a výškové formáty (avatar,
+    razítko, titulní strana). Wordmark je Instrument Serif Regular; poměr: výška
+    textu = 6/7 výšky monogramu, mezera = ~1/2 šířky monogramu.</p>
+
+    <div class="grid" style="grid-template-columns: 1fr;">
+      <div class="tile">
+        <div class="stage stage--paper">
+          <svg height="40" viewBox="0 0 990 168" fill="#1A1815"><rect x="0" y="89" width="25" height="79"></rect><rect x="36" y="0" width="25" height="168"></rect><rect x="71" y="0" width="25" height="168" fill="#C93A20"></rect><rect x="107" y="0" width="25" height="79"></rect><rect x="107" y="89" width="25" height="79"></rect><text x="196" y="136" font-family="'Instrument Serif', Georgia, serif" font-size="144" textLength="770" lengthAdjust="spacingAndGlyphs">Josef Kvapil</text></svg>
+        </div>
+        <div class="caption"><span class="name">Horizontální — světlé pozadí</span><span class="file">logo-horizontal.svg · varianty: -dark, -black, -white</span></div>
+      </div>
+    </div>
+    <div class="grid" style="margin-top: 1.5rem;">
+      <div class="tile">
+        <div class="stage stage--dark">
+          <svg height="40" viewBox="0 0 990 168" fill="#E8E4DC"><rect x="0" y="89" width="25" height="79"></rect><rect x="36" y="0" width="25" height="168"></rect><rect x="71" y="0" width="25" height="168" fill="#FF5A3C"></rect><rect x="107" y="0" width="25" height="79"></rect><rect x="107" y="89" width="25" height="79"></rect><text x="196" y="136" font-family="'Instrument Serif', Georgia, serif" font-size="144" textLength="770" lengthAdjust="spacingAndGlyphs">Josef Kvapil</text></svg>
+        </div>
+        <div class="caption"><span class="name">Horizontální — tmavé pozadí</span><span class="file">logo-horizontal-dark.svg</span></div>
+      </div>
+      <div class="tile">
+        <div class="stage stage--paper">
+          <svg height="110" viewBox="0 0 560 380" fill="#1A1815"><g transform="translate(214, 20)"><rect x="0" y="89" width="25" height="79"></rect><rect x="36" y="0" width="25" height="168"></rect><rect x="71" y="0" width="25" height="168" fill="#C93A20"></rect><rect x="107" y="0" width="25" height="79"></rect><rect x="107" y="89" width="25" height="79"></rect></g><text x="70" y="330" font-family="'Instrument Serif', Georgia, serif" font-size="78" textLength="420" lengthAdjust="spacingAndGlyphs">Josef Kvapil</text></svg>
+        </div>
+        <div class="caption"><span class="name">Stacked — čtvercové formáty</span><span class="file">logo-stacked.svg · varianta: -dark</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <span class="label">03 · Ochranná zóna a minima</span>
+    <h2>Prostor kolem značky</h2>
+    <p>Ochranná zóna = šířka jednoho pruhu a mezery (36 jednotek, tj. ~27 % šířky
+    monogramu) na všech stranách. Do zóny nesmí text, jiná loga ani hrana formátu.</p>
+    <div class="clearspace-figure">
+      <svg height="150" viewBox="-36 -36 204 240" aria-label="Ochranná zóna">
+        <rect x="-36" y="-36" width="204" height="240" fill="none" stroke="var(--muted)" stroke-dasharray="6 6" stroke-width="2"></rect>
+        <g fill="var(--ink)">
+          <rect x="0" y="89" width="25" height="79"></rect>
+          <rect x="36" y="0" width="25" height="168"></rect>
+          <rect x="71" y="0" width="25" height="168" fill="var(--accent)"></rect>
+          <rect x="107" y="0" width="25" height="79"></rect>
+          <rect x="107" y="89" width="25" height="79"></rect>
+        </g>
+      </svg>
+    </div>
+    <div class="table-wrap" style="margin-top: 1.5rem;">
+      <table>
+        <tr><th>Varianta</th><th>Min. digital</th><th>Min. tisk</th></tr>
+        <tr><td>Symbol</td><td class="mono">16 px výška</td><td class="mono">5 mm výška</td></tr>
+        <tr><td>Horizontální lockup</td><td class="mono">24 px výška</td><td class="mono">8 mm výška</td></tr>
+        <tr><td>Stacked lockup</td><td class="mono">64 px výška</td><td class="mono">18 mm výška</td></tr>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <span class="label">04 · Barvy</span>
+    <h2>Paleta</h2>
+    <p>Světlý režim je primární („papír"). Vermilion je jediný akcent — používejte ho
+    střídmě: třetí pruh loga, odkazy, jedno zvýraznění na plochu. Poměr zhruba
+    90 % papír / 9 % ink / 1 % akcent. CMYK hodnoty jsou přepočet — před tiskem
+    ověřte na nátisku.</p>
+
+    <h3>Světlý režim (primární)</h3>
+    <div class="swatches">
+      <div class="swatch"><div class="chip" style="background:#faf8f4; border-bottom: 1px solid var(--hairline);"></div><div class="name">Paper</div><dl><dt>HEX</dt><dd>#FAF8F4</dd><dt>RGB</dt><dd>250 248 244</dd><dt>CMYK</dt><dd>0 1 2 2</dd></dl></div>
+      <div class="swatch"><div class="chip" style="background:#1a1815;"></div><div class="name">Ink</div><dl><dt>HEX</dt><dd>#1A1815</dd><dt>RGB</dt><dd>26 24 21</dd><dt>CMYK</dt><dd>0 8 19 90</dd></dl></div>
+      <div class="swatch"><div class="chip" style="background:#c93a20;"></div><div class="name">Vermilion</div><dl><dt>HEX</dt><dd>#C93A20</dd><dt>RGB</dt><dd>201 58 32</dd><dt>CMYK</dt><dd>0 71 84 21</dd></dl></div>
+      <div class="swatch"><div class="chip" style="background:#6b6660;"></div><div class="name">Muted</div><dl><dt>HEX</dt><dd>#6B6660</dd><dt>RGB</dt><dd>107 102 96</dd><dt>CMYK</dt><dd>0 5 10 58</dd></dl></div>
+      <div class="swatch"><div class="chip" style="background:#f2efe9; border-bottom: 1px solid var(--hairline);"></div><div class="name">Surface</div><dl><dt>HEX</dt><dd>#F2EFE9</dd><dt>RGB</dt><dd>242 239 233</dd><dt>CMYK</dt><dd>0 1 4 5</dd></dl></div>
+      <div class="swatch"><div class="chip" style="background:#dedad2; border-bottom: 1px solid var(--hairline);"></div><div class="name">Hairline</div><dl><dt>HEX</dt><dd>#DEDAD2</dd><dt>RGB</dt><dd>222 218 210</dd><dt>CMYK</dt><dd>0 2 5 13</dd></dl></div>
+    </div>
+
+    <h3 style="margin-top: 2.5rem;">Tmavý režim</h3>
+    <div class="swatches">
+      <div class="swatch"><div class="chip" style="background:#121110;"></div><div class="name">Paper (dark)</div><dl><dt>HEX</dt><dd>#121110</dd><dt>RGB</dt><dd>18 17 16</dd></dl></div>
+      <div class="swatch"><div class="chip" style="background:#e8e4dc;"></div><div class="name">Ink (dark)</div><dl><dt>HEX</dt><dd>#E8E4DC</dd><dt>RGB</dt><dd>232 228 220</dd></dl></div>
+      <div class="swatch"><div class="chip" style="background:#ff5a3c;"></div><div class="name">Vermilion (dark)</div><dl><dt>HEX</dt><dd>#FF5A3C</dd><dt>RGB</dt><dd>255 90 60</dd></dl></div>
+      <div class="swatch"><div class="chip" style="background:#918c84;"></div><div class="name">Muted (dark)</div><dl><dt>HEX</dt><dd>#918C84</dd><dt>RGB</dt><dd>145 140 132</dd></dl></div>
+    </div>
+
+    <p style="margin-top: 1.5rem;">Přístupnost: Vermilion #C93A20 na Paper má kontrast 4,82 : 1 (WCAG AA
+    i pro běžný text). Ink na Paper 15,7 : 1. Nikdy nesázejte text vermilion na ink
+    ani ink na vermilion — kontrast nevyhovuje.</p>
+  </section>
+
+  <section>
+    <span class="label">05 · Typografie</span>
+    <h2>Tři písma, tři role</h2>
+
+    <div class="type-specimen">
+      <span class="label">Display · Instrument Serif Regular</span>
+      <div class="sample" style="font-family: var(--font-display); font-size: 2.5rem; line-height: 1.05; letter-spacing: -0.01em;">Frontend architektura, která unese dvacet týmů.</div>
+      <p style="margin:0; font-size: 0.875rem; color: var(--muted);">Titulky, wordmark, velké číslice. Jen Regular, žádný bold ani italic. Google Fonts / Fontsource: instrument-serif.</p>
+    </div>
+
+    <div class="type-specimen">
+      <span class="label">Body · Public Sans Regular / SemiBold</span>
+      <div class="sample" style="font-size: 1rem; max-width: 42rem;">Běžný text, odstavce, popisy. Řádek do ~65 znaků, prostrkání výchozí. SemiBold pro zvýraznění, nikdy underline mimo odkazy.</div>
+      <p style="margin:0; font-size: 0.875rem; color: var(--muted);">Google Fonts / Fontsource: public-sans (variable).</p>
+    </div>
+
+    <div class="type-specimen">
+      <span class="label">Label · JetBrains Mono Regular</span>
+      <div class="sample" style="font-family: var(--font-mono); font-size: 0.8125rem; letter-spacing: 0.08em; text-transform: uppercase;">Kickery · číslování sekcí · metadata · kód</div>
+      <p style="margin:0; font-size: 0.875rem; color: var(--muted);">Vždy uppercase s prostrkáním 0.08em, velikost 13 px. Google Fonts / Fontsource: jetbrains-mono.</p>
+    </div>
+  </section>
+
+  <section>
+    <span class="label">06 · Pravidla použití</span>
+    <h2>Co dělat a nedělat</h2>
+    <div class="rules">
+      <div>
+        <h3 class="do-head">Ano</h3>
+        <ul>
+          <li>Používat dodané SVG soubory beze změn.</li>
+          <li>Na fotografii nebo rušivé pozadí jen mono variantu (white/black).</li>
+          <li>Na vermilion plochu výhradně bílou mono variantu.</li>
+          <li>Před tiskem převést wordmark (text) na křivky.</li>
+          <li>Jednobarevný tisk: mono ink varianta.</li>
+        </ul>
+      </div>
+      <div>
+        <h3>Ne</h3>
+        <ul>
+          <li>Neměnit barvu ani pozici akcentního pruhu.</li>
+          <li>Nedeformovat, nenaklánět, nepřidávat stín, obrys ani gradient.</li>
+          <li>Nesázet wordmark jiným písmem než Instrument Serif.</li>
+          <li>Nekombinovat světlou a tmavou paletu v jednom formátu.</li>
+          <li>Nepoužívat zaoblené rohy — značka je ostrá, hrany vždy 90°.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <span class="label">07 · Vizitka</span>
+    <h2>85 × 55 mm</h2>
+    <p>Přední strana: horizontální lockup nahoře, kontakt dole v mono. Zadní strana:
+    pouze symbol na ink ploše, opticky na střed. Spadávka 3 mm, texty min. 5 mm od
+    ořezu. Papír: nenatíraný, přírodní bílá (Munken, Olin), 300–350 g.</p>
+    <div class="card-figure">
+      <div>
+        <div class="bizcard bizcard--front">
+          <svg height="22" viewBox="0 0 990 168" fill="#1A1815" style="align-self: flex-start;"><rect x="0" y="89" width="25" height="79"></rect><rect x="36" y="0" width="25" height="168"></rect><rect x="71" y="0" width="25" height="168" fill="#C93A20"></rect><rect x="107" y="0" width="25" height="79"></rect><rect x="107" y="89" width="25" height="79"></rect><text x="196" y="136" font-family="'Instrument Serif', Georgia, serif" font-size="144" textLength="770" lengthAdjust="spacingAndGlyphs">Josef Kvapil</text></svg>
+          <div style="display:flex; justify-content: space-between; align-items: flex-end; gap: 1rem;">
+            <div class="who"><div class="r">Frontend architekt · Liberec</div></div>
+            <div class="contact" style="text-align: right;">josef0kvapil@gmail.com<br>jkvapil.cz</div>
+          </div>
+        </div>
+        <p class="figcap">Přední strana — Paper #FAF8F4</p>
+      </div>
+      <div>
+        <div class="bizcard bizcard--back">
+          <svg height="52" viewBox="0 0 132 168" fill="#E8E4DC"><rect x="0" y="89" width="25" height="79"></rect><rect x="36" y="0" width="25" height="168"></rect><rect x="71" y="0" width="25" height="168" fill="#FF5A3C"></rect><rect x="107" y="0" width="25" height="79"></rect><rect x="107" y="89" width="25" height="79"></rect></svg>
+        </div>
+        <p class="figcap">Zadní strana — Paper dark #121110</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <span class="label">08 · Soubory</span>
+    <h2>Inventář assets</h2>
+    <p>Vše v adresáři <span style="font-family: var(--font-mono); font-size: 0.85em;">brand/</span> v repu portfolia.
+    SVG mají průhledné pozadí — PNG export dle potřeby:
+    <span style="font-family: var(--font-mono); font-size: 0.85em;">rsvg-convert -h 512 logo-symbol.svg &gt; logo-symbol.png</span>.</p>
+    <div class="table-wrap">
+      <table>
+        <tr><th>Soubor</th><th>Použití</th></tr>
+        <tr><td class="mono">logo-symbol.svg</td><td>symbol, světlé pozadí (výchozí)</td></tr>
+        <tr><td class="mono">logo-symbol-dark.svg</td><td>symbol, tmavé pozadí</td></tr>
+        <tr><td class="mono">logo-symbol-black.svg</td><td>symbol mono ink — 1barevný tisk, gravírování, razítko</td></tr>
+        <tr><td class="mono">logo-symbol-white.svg</td><td>symbol mono bílý — tmavé a vermilion plochy, fotky</td></tr>
+        <tr><td class="mono">logo-symbol-accent.svg</td><td>symbol celý vermilion — detail, pečeť</td></tr>
+        <tr><td class="mono">logo-horizontal.svg</td><td>jednořádkové logo, světlé pozadí</td></tr>
+        <tr><td class="mono">logo-horizontal-dark.svg</td><td>jednořádkové, tmavé pozadí</td></tr>
+        <tr><td class="mono">logo-horizontal-black.svg</td><td>jednořádkové mono ink</td></tr>
+        <tr><td class="mono">logo-horizontal-white.svg</td><td>jednořádkové mono bílé</td></tr>
+        <tr><td class="mono">logo-stacked.svg</td><td>stacked, světlé pozadí</td></tr>
+        <tr><td class="mono">logo-stacked-dark.svg</td><td>stacked, tmavé pozadí</td></tr>
+      </table>
+    </div>
+  </section>
+
+  <footer>
+    <span>Josef Kvapil — Design manual v1.0</span>
+    <span>2026 · tokeny: src/styles/global.css</span>
+  </footer>
+</main>

@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 380" fill="#E8E4DC">
+  <title>Josef Kvapil — stacked lockup (dark background)</title>
+  <!-- Wordmark requires the Instrument Serif font; convert text to outlines before print. -->
+  <g transform="translate(214, 20)">
+    <rect x="0" y="89" width="25" height="79"/>
+    <rect x="36" y="0" width="25" height="168"/>
+    <rect x="71" y="0" width="25" height="168" fill="#FF5A3C"/>
+    <rect x="107" y="0" width="25" height="79"/>
+    <rect x="107" y="89" width="25" height="79"/>
+  </g>
+  <text x="70" y="330" font-family="'Instrument Serif', Georgia, serif" font-size="78" textLength="420" lengthAdjust="spacingAndGlyphs">Josef Kvapil</text>
+</svg>

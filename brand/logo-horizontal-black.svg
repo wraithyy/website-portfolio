@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 990 168" fill="#1A1815">
+  <title>Josef Kvapil — horizontal lockup (monochrome ink)</title>
+  <!-- Wordmark requires the Instrument Serif font; convert text to outlines before print. -->
+  <rect x="0" y="89" width="25" height="79"/>
+  <rect x="36" y="0" width="25" height="168"/>
+  <rect x="71" y="0" width="25" height="168"/>
+  <rect x="107" y="0" width="25" height="79"/>
+  <rect x="107" y="89" width="25" height="79"/>
+  <text x="196" y="136" font-family="'Instrument Serif', Georgia, serif" font-size="144" textLength="770" lengthAdjust="spacingAndGlyphs">Josef Kvapil</text>
+</svg>
