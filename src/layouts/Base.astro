@@ -54,6 +54,7 @@ const fontPreloads =
     <meta name="twitter:description" content={t('meta.description')} />
     <meta name="twitter:image" content={new URL('/og.png', Astro.site)} />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     {fontPreloads.map((href) => <link rel="preload" href={href} as="font" type="font/woff2" crossorigin />)}
     <script
       is:inline
