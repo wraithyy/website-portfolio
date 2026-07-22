@@ -35,9 +35,13 @@ const t = useTranslations(lang);
       >
         <a
           href="#experience"
-          class="label-mono absolute right-0 bottom-3 text-muted transition-colors hover:text-accent lg:hidden"
+          class="skip-link label-mono absolute right-0 bottom-3 flex items-center gap-2 text-muted transition-colors hover:text-accent focus-visible:text-accent"
         >
-          {t('story.skip')} <span aria-hidden="true">↓</span>
+          {t('story.skip')}
+          <svg width="10" height="30" viewBox="0 0 10 30" fill="none" stroke="currentColor" stroke-width="1" aria-hidden="true">
+            <line class="skip-dash" x1="5" y1="0" x2="5" y2="23" stroke-dasharray="4 4" />
+            <path d="M1 24 L5 29 L9 24" />
+          </svg>
         </a>
         <div class="btn-slot relative grid min-h-14 min-w-48 place-items-center will-change-transform">
           <!-- Living blueprint: drafting annotations that redraw per stage and clean up on ship -->
@@ -173,6 +177,25 @@ const t = useTranslations(lang);
   }
   @media (prefers-reduced-motion: reduce) {
     .rise {
+      animation: none;
+    }
+  }
+
+  /* skip: living dimension line — dashes flow toward the arrow */
+  .skip-dash {
+    animation: march 900ms linear infinite;
+  }
+  .skip-link:hover .skip-dash,
+  .skip-link:focus-visible .skip-dash {
+    animation-duration: 450ms;
+  }
+  @keyframes march {
+    to {
+      stroke-dashoffset: -8;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .skip-dash {
       animation: none;
     }
   }
