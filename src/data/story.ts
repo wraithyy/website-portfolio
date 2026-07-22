@@ -23,16 +23,16 @@ export const storySteps: StoryStep[] = [
   },
   {
     label: { en: '02 — TypeScript', cs: '02 — TypeScript' },
-    title: { en: 'Then I write its contract.', cs: 'Pak mu napíšu kontrakt.' },
+    title: { en: 'Then I type how it communicates.', cs: 'Pak otypuju, jak komunikuje.' },
     onButton: {
       en: 'typed props between component and caller',
       cs: 'typované props mezi komponentou a volajícím',
     },
     onPlatform: {
-      en: 'typed contracts between teams',
-      cs: 'typované kontrakty mezi týmy',
+      en: 'typed interfaces between teams',
+      cs: 'typovaná rozhraní mezi týmy',
     },
-    note: { en: 'fig. 02 — contract attached', cs: 'obr. 02 — kontrakt připojen' },
+    note: { en: 'fig. 02 — interface attached', cs: 'obr. 02 — rozhraní připojeno' },
   },
   {
     label: { en: '03 — Design systems', cs: '03 — Design systémy' },

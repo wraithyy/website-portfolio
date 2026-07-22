@@ -11,7 +11,6 @@ export const ui = {
     'meta.description':
       'Frontend architect and team lead. React and TypeScript platforms for banking, energy and insurance — and open-source tooling that keeps code honest.',
     'nav.skip': 'Skip to main content',
-    'nav.projects': 'Open source',
     'nav.experience': 'Capabilities',
     'nav.about': 'About',
     'nav.contact': 'Contact',
@@ -36,8 +35,6 @@ export const ui = {
     'exp.title': 'What I bring to a project.',
     'exp.note': 'Real deliveries; I deliberately don’t name clients.',
 
-    'projects.label': 'Open source',
-    'projects.title': 'Tools that speak for me in public',
     'about.label': 'About',
     'about.title': 'I dig into how things work underneath.',
     'about.bio':
@@ -63,7 +60,6 @@ export const ui = {
     'meta.description':
       'Frontend architekt a team lead. React a TypeScript pro bankovnictví, energetiku a pojišťovnictví — a open-source nástroje, které drží kód v lati.',
     'nav.skip': 'Přeskočit na hlavní obsah',
-    'nav.projects': 'Open source',
     'nav.experience': 'Co umím',
     'nav.about': 'O mně',
     'nav.contact': 'Kontakt',
@@ -88,8 +84,6 @@ export const ui = {
     'exp.title': 'Co do projektu přináším.',
     'exp.note': 'Reálné dodávky; klienty záměrně nejmenuji.',
 
-    'projects.label': 'Open source',
-    'projects.title': 'Nástroje, které za mě mluví veřejně',
     'about.label': 'O mně',
     'about.title': 'Zajímá mě, jak věci fungují uvnitř.',
     'about.bio':
