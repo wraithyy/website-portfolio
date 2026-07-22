@@ -108,5 +108,49 @@ const fontPreloads =
       {t('nav.skip')}
     </a>
     <slot />
+    <script>
+      import { email, github } from '../data/site';
+
+      /* Console art — the JK monogram (see Logo.astro), third bar in accent.
+         Left/right of the accent bar per row; row 4 is the gap in the K. */
+      const left = ['    ███ ', '    ███ ', '    ███ ', '    ███ ', '███ ███ ', '███ ███ ', '███ ███ '];
+      const right = [' ███', ' ███', ' ███', '', ' ███', ' ███', ' ███'];
+      const mono = 'font-family:ui-monospace,monospace';
+      const accent = `${mono};color:#e8442e`;
+      console.log(
+        `\n${left.map((l, i) => `%c${l}%c███%c${right[i]}`).join('\n')}\n`,
+        ...left.flatMap(() => [mono, accent, mono]),
+      );
+      console.log(
+        `%c0 errors, 0 warnings, 1 hidden message. You found it.\n\nLet's talk → ${email}\nReceipts   → ${github}\n\nP.S. you read consoles for fun — you'll want this: ↑ ↑ ↓ ↓ ← → ← → B A`,
+        mono,
+      );
+
+      /* Konami code → dynamic-import the easter egg (src/scripts/vibecoding.ts).
+         The payload lives in its own chunk and is only fetched the moment
+         someone actually finishes the code. */
+      const KONAMI = [
+        'ArrowUp',
+        'ArrowUp',
+        'ArrowDown',
+        'ArrowDown',
+        'ArrowLeft',
+        'ArrowRight',
+        'ArrowLeft',
+        'ArrowRight',
+        'b',
+        'a',
+      ];
+      let progress = 0;
+
+      addEventListener('keydown', (e) => {
+        const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+        progress = key === KONAMI[progress] ? progress + 1 : key === KONAMI[0] ? 1 : 0;
+        if (progress === KONAMI.length) {
+          progress = 0;
+          import('../scripts/vibecoding').then((m) => m.show());
+        }
+      });
+    </script>
   </body>
 </html>
