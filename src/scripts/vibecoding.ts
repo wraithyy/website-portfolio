@@ -117,7 +117,7 @@ export function show(): void {
 
       <p style="margin:5rem 0 0;padding:1.5rem 0 6.5rem;border-top:1px solid rgba(255,255,255,.08);font-size:.75rem;color:#52525b">© 2026 Josef Kvapil 2.0 · Built in 5 minutes with AI · No humans were consulted</p>
     </div>
-    <p role="status" style="position:fixed;bottom:1.25rem;left:50%;translate:-50% 0;z-index:103;margin:0;max-width:calc(100vw - 2rem);padding:.75rem 1.25rem;background:#faf8f4;color:#1a1815;font-family:${MONO};font-size:.8125rem;letter-spacing:.04em;box-shadow:0 4px 24px rgba(0,0,0,.4)">Same content. Zero review. AI drafts, people sign. — Esc to undo</p>`;
+    <p role="status" style="position:fixed;bottom:1.25rem;left:50%;translate:-50% 0;z-index:103;margin:0;max-width:calc(100vw - 2rem);padding:.75rem 1.25rem;background:#faf8f4;color:#1a1815;font-family:${MONO};font-size:.8125rem;letter-spacing:.04em;box-shadow:0 4px 24px rgba(0,0,0,.4)">Thanks to unsupervised AI, 80% of the web now looks like this. Mine doesn't — Esc to see the difference.</p>`;
 
   /* -- the obligatory cursor effects ----------------------------------- */
   const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
