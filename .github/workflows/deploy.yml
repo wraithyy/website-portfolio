@@ -12,9 +12,11 @@
 
 name: Deploy
 
+# push to main → production (jkvapil.cz); push to any other branch → a
+# Cloudflare Pages preview URL (safe on-device AR testing, no prod impact).
 on:
   push:
-    branches: [main]
+    branches: ['**']
   workflow_dispatch:
 
 jobs:
@@ -50,10 +52,16 @@ jobs:
           command: pages project create website-portfolio --production-branch=main
 
       - name: Deploy to Cloudflare Pages
+        id: deploy
         uses: cloudflare/wrangler-action@v4
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           # wrangler is a devDependency — the action reuses the pnpm install
           packageManager: pnpm
-          command: pages deploy dist --project-name=website-portfolio --branch=main
+          # branch = current branch: "main" deploys to production, anything else
+          # becomes a preview deployment with its own URL
+          command: pages deploy dist --project-name=website-portfolio --branch=${{ github.ref_name }}
+
+      - name: Report deployment URL
+        run: echo "### Deployed → ${{ steps.deploy.outputs.deployment-url }}" >> "$GITHUB_STEP_SUMMARY"

@@ -7,3 +7,5 @@ allowBuilds:
   esbuild: true
   sharp: true
   workerd: true
+patchedDependencies:
+  mind-ar: patches/mind-ar.patch
