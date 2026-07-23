@@ -1,0 +1,9 @@
+BEGIN:VCARD
+VERSION:3.0
+FN:Josef Kvapil
+N:Kvapil;Josef;;;
+TITLE:Frontend architekt
+EMAIL;TYPE=INTERNET:josef0kvapil@gmail.com
+URL:https://jkvapil.cz
+ADR;TYPE=WORK:;;;Liberec;;;Czechia
+END:VCARD

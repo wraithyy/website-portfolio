@@ -1,4 +1,9 @@
 allowBuilds:
+  # canvas + core-js are transitive from mind-ar; only its Node-side .mind
+  # compiler needs canvas, the browser AR build never touches it. Deny their
+  # builds so install/CI don't fail on ERR_PNPM_IGNORED_BUILDS.
+  canvas: false
+  core-js: false
   esbuild: true
   sharp: true
   workerd: true

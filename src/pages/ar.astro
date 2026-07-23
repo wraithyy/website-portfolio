@@ -1,0 +1,167 @@
+---
+import Base from '../layouts/Base.astro';
+
+// Standalone utility route reached only by scanning the printed card's QR.
+// noindex — not part of the site's content. Copy is deliberately inline and
+// bilingual (CZ primary / EN subline) rather than in i18n/ui.ts: it is a tiny
+// single-purpose page, not part of the localized main-site flow.
+---
+
+<Base lang="en" noindex>
+  <main id="main-content" class="ar">
+    <div id="ar-container" class="ar__stage"></div>
+
+    <div id="ar-intro" class="ar__overlay">
+      <span class="label-mono ar__kicker">Josef Kvapil · AR</span>
+      <p class="ar__lead">Namiř foťák na zadní stranu vizitky.</p>
+      <p class="ar__sub">Point your camera at the back of the card.</p>
+      <button id="ar-start" class="ar__btn" type="button">Spustit kameru · Start</button>
+      <a href="/josef.vcf" download class="ar__back label-mono">Uložit kontakt · Save contact</a>
+      <a href="/" class="ar__back label-mono">jkvapil.cz</a>
+    </div>
+
+    <a href="/josef.vcf" download class="ar__save label-mono">Uložit kontakt</a>
+
+    <div id="ar-hint" class="ar__hint label-mono" hidden>
+      Drž vizitku v záběru · Keep the card in view
+    </div>
+
+    <div id="ar-error" class="ar__overlay" hidden>
+      <p class="ar__lead">Kameru se nepodařilo spustit.</p>
+      <p id="ar-error-msg" class="ar__sub"></p>
+      <a href="/" class="ar__btn">Zpět na web · Back</a>
+    </div>
+  </main>
+</Base>
+
+<style>
+  .ar {
+    position: fixed;
+    inset: 0;
+    background: var(--ink);
+    color: var(--paper);
+    overflow: hidden;
+  }
+  .ar__stage {
+    position: absolute;
+    inset: 0;
+  }
+  /* mind-ar injects a full-bleed video + canvas; keep them covering the stage */
+  .ar__stage :global(video),
+  .ar__stage :global(canvas) {
+    position: absolute;
+    inset: 0;
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: cover;
+  }
+  .ar__overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    text-align: center;
+    padding: 2rem;
+    background: var(--ink);
+  }
+  .ar__kicker {
+    color: var(--accent);
+  }
+  .ar__lead {
+    font-family: var(--font-display, 'Instrument Serif', serif);
+    font-size: clamp(1.75rem, 6vw, 2.75rem);
+    line-height: 1.05;
+    margin: 0;
+    max-width: 18ch;
+  }
+  .ar__sub {
+    color: var(--muted);
+    margin: 0;
+    font-size: 0.95rem;
+  }
+  .ar__btn {
+    margin-top: 0.5rem;
+    font-family: var(--font-mono, 'JetBrains Mono', monospace);
+    font-size: 0.8125rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--paper);
+    background: var(--accent);
+    border: none;
+    padding: 0.85rem 1.4rem;
+    cursor: pointer;
+    text-decoration: none;
+  }
+  .ar__btn:hover {
+    opacity: 0.92;
+  }
+  .ar__back {
+    color: var(--muted);
+    text-decoration: none;
+    margin-top: 0.5rem;
+  }
+  .ar__save {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    z-index: 3;
+    color: var(--paper);
+    background: color-mix(in srgb, var(--ink) 70%, transparent);
+    padding: 0.5rem 0.8rem;
+    font-size: 0.7rem;
+    text-decoration: none;
+  }
+  .ar__hint {
+    position: absolute;
+    left: 50%;
+    bottom: 1.5rem;
+    transform: translateX(-50%);
+    z-index: 2;
+    color: var(--paper);
+    background: color-mix(in srgb, var(--ink) 70%, transparent);
+    padding: 0.5rem 0.9rem;
+    font-size: 0.7rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    pointer-events: none;
+  }
+</style>
+
+<script>
+  const intro = document.getElementById('ar-intro')!;
+  const hint = document.getElementById('ar-hint')!;
+  const errorBox = document.getElementById('ar-error')!;
+  const errorMsg = document.getElementById('ar-error-msg')!;
+  const startBtn = document.getElementById('ar-start') as HTMLButtonElement;
+  const container = document.getElementById('ar-container')!;
+
+  const fail = (msg: string) => {
+    intro.hidden = true;
+    hint.hidden = true;
+    errorBox.hidden = false;
+    errorMsg.textContent = msg;
+  };
+
+  startBtn.addEventListener('click', async () => {
+    startBtn.disabled = true;
+    startBtn.textContent = 'Spouštím… · Loading…';
+    try {
+      const { start } = await import('../scripts/ar');
+      await start(container);
+      intro.hidden = true;
+      hint.hidden = false;
+    } catch (e) {
+      const err = e as { name?: string; message?: string };
+      const denied = err?.name === 'NotAllowedError';
+      fail(
+        denied
+          ? 'Přístup ke kameře byl odepřen. Povol kameru v prohlížeči a zkus to znovu.'
+          : err?.message || 'Zkus to prosím v jiném prohlížeči (Safari / Chrome).',
+      );
+    }
+  });
+</script>
