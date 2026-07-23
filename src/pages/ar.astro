@@ -1,41 +1,65 @@
 ---
 import Base from '../layouts/Base.astro';
+import { email, github, linkedin } from '../data/site';
 
 // Standalone utility route reached only by scanning the printed card's QR.
-// noindex — not part of the site's content. Copy is deliberately inline and
-// bilingual (CZ primary / EN subline) rather than in i18n/ui.ts: it is a tiny
-// single-purpose page, not part of the localized main-site flow.
+// noindex. Copy is inline + bilingual (CZ primary · EN) rather than in
+// i18n/ui.ts — a tiny single-purpose page, not part of the localized site flow.
 ---
 
 <Base lang="en" noindex>
   <main id="main-content" class="ar">
     <div id="ar-container" class="ar__stage"></div>
 
-    <div id="ar-intro" class="ar__overlay">
+    <!-- AR supported: intro / start -->
+    <div id="ar-intro" class="ar__overlay" hidden>
       <span class="label-mono ar__kicker">Josef Kvapil · AR</span>
       <p class="ar__lead">Namiř foťák na zadní stranu vizitky.</p>
       <p class="ar__sub">Point your camera at the back of the card.</p>
       <button id="ar-start" class="ar__btn" type="button">Spustit kameru · Start</button>
-      <a href="/josef.vcf" download class="ar__back label-mono">Uložit kontakt · Save contact</a>
-      <a href="/" class="ar__back label-mono">jkvapil.cz</a>
+      <a href="/josef.vcf" download class="ar__link label-mono" data-ev="contact_save">
+        Uložit kontakt · Save contact
+      </a>
     </div>
 
-    <a href="/josef.vcf" download class="ar__save label-mono">Uložit kontakt</a>
+    <!-- loading the AR engine -->
+    <div id="ar-loading" class="ar__overlay" hidden>
+      <div class="ar__spinner" aria-hidden="true"></div>
+      <p class="ar__sub">Načítám AR… · Loading…</p>
+    </div>
 
     <div id="ar-hint" class="ar__hint label-mono" hidden>
-      Drž vizitku v záběru — na konci zmáčkni tlačítko
+      Drž vizitku v záběru · Keep the card in frame
     </div>
 
-    <div id="ar-error" class="ar__overlay" hidden>
-      <p class="ar__lead">Kameru se nepodařilo spustit.</p>
-      <p id="ar-error-msg" class="ar__sub"></p>
-      <a href="/" class="ar__btn">Zpět na web · Back</a>
+    <!-- shown once the story completes: the real choice of actions -->
+    <div id="ar-cta" class="ar__actions" hidden>
+      <a href={`mailto:${email}`} class="ar__btn" data-ev="cta_mail">Napiš mi →</a>
+      <a href="/josef.vcf" download class="ar__btn ar__btn--ghost" data-ev="contact_save">
+        Uložit kontakt
+      </a>
+      <a href="/" class="ar__btn ar__btn--ghost" data-ev="cta_web">jkvapil.cz</a>
+      <button id="ar-replay" class="ar__btn ar__btn--ghost" type="button">Znovu ↺</button>
+    </div>
+
+    <!-- no camera / unsupported / in-app webview / denied: a real contact card -->
+    <div id="ar-fallback" class="ar__overlay" hidden>
+      <span class="label-mono ar__kicker">Josef Kvapil</span>
+      <p class="ar__lead">Frontend architekt</p>
+      <p id="ar-fallback-msg" class="ar__sub"></p>
+      <div class="ar__actions ar__actions--static">
+        <a href="/josef.vcf" download class="ar__btn" data-ev="contact_save">Uložit kontakt</a>
+        <a href={`mailto:${email}`} class="ar__btn ar__btn--ghost" data-ev="cta_mail">Napiš mi</a>
+        <a href={linkedin} class="ar__btn ar__btn--ghost" rel="noopener" target="_blank">LinkedIn</a>
+        <a href={github} class="ar__btn ar__btn--ghost" rel="noopener" target="_blank">GitHub</a>
+        <a href="/" class="ar__btn ar__btn--ghost">jkvapil.cz</a>
+      </div>
+      <button id="ar-copy" class="ar__link label-mono" type="button" hidden>Zkopírovat odkaz</button>
     </div>
   </main>
 </Base>
 
 <style>
-  /* full-screen AR route — no page scroll */
   :global(html),
   :global(body) {
     margin: 0;
@@ -47,7 +71,7 @@ import Base from '../layouts/Base.astro';
     inset: 0;
     width: 100vw;
     height: 100vh; /* fallback */
-    height: 100dvh; /* dynamic viewport — full height on mobile Safari */
+    height: 100dvh; /* full height on mobile Safari */
     background: var(--ink);
     color: var(--paper);
     overflow: hidden;
@@ -57,9 +81,7 @@ import Base from '../layouts/Base.astro';
     inset: 0;
     overflow: hidden;
   }
-  /* mind-ar sizes & centres the video/canvas itself (inline px width + negative
-     top/left to cover). Don't override those or it shifts off-centre — just clip
-     any overflow above and lock the page from scrolling. */
+  /* mind-ar sizes & centres the video/canvas itself — don't override it. */
   .ar__overlay {
     position: absolute;
     inset: 0;
@@ -87,9 +109,9 @@ import Base from '../layouts/Base.astro';
     color: var(--muted);
     margin: 0;
     font-size: 0.95rem;
+    max-width: 30ch;
   }
   .ar__btn {
-    margin-top: 0.5rem;
     font-family: var(--font-mono, 'JetBrains Mono', monospace);
     font-size: 0.8125rem;
     letter-spacing: 0.08em;
@@ -97,28 +119,45 @@ import Base from '../layouts/Base.astro';
     color: var(--paper);
     background: var(--accent);
     border: none;
-    padding: 0.85rem 1.4rem;
+    padding: 0.8rem 1.3rem;
     cursor: pointer;
     text-decoration: none;
+    display: inline-block;
   }
   .ar__btn:hover {
     opacity: 0.92;
   }
-  .ar__back {
+  .ar__btn--ghost {
+    background: transparent;
+    color: var(--paper);
+    border: 1px solid color-mix(in srgb, var(--paper) 35%, transparent);
+  }
+  .ar__link {
     color: var(--muted);
     text-decoration: none;
-    margin-top: 0.5rem;
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 0.75rem;
   }
-  .ar__save {
+  /* completion action cluster — floats over the live AR at the bottom */
+  .ar__actions {
     position: absolute;
-    top: 1rem;
-    right: 1rem;
+    left: 50%;
+    bottom: 1.5rem;
+    transform: translateX(-50%);
     z-index: 3;
-    color: var(--paper);
-    background: color-mix(in srgb, var(--ink) 70%, transparent);
-    padding: 0.5rem 0.8rem;
-    font-size: 0.7rem;
-    text-decoration: none;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    justify-content: center;
+    max-width: min(92vw, 30rem);
+    padding: 0 1rem;
+  }
+  .ar__actions--static {
+    position: static;
+    transform: none;
+    margin-top: 0.5rem;
   }
   .ar__hint {
     position: absolute;
@@ -134,39 +173,127 @@ import Base from '../layouts/Base.astro';
     text-transform: uppercase;
     pointer-events: none;
   }
+  .ar__spinner {
+    width: 2rem;
+    height: 2rem;
+    border: 2px solid color-mix(in srgb, var(--paper) 25%, transparent);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: ar-spin 0.8s linear infinite;
+  }
+  @keyframes ar-spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .ar__spinner {
+      animation-duration: 2s;
+    }
+  }
 </style>
 
 <script>
-  const intro = document.getElementById('ar-intro')!;
-  const hint = document.getElementById('ar-hint')!;
-  const errorBox = document.getElementById('ar-error')!;
-  const errorMsg = document.getElementById('ar-error-msg')!;
-  const startBtn = document.getElementById('ar-start') as HTMLButtonElement;
-  const container = document.getElementById('ar-container')!;
+  type ARHandle = { stop: () => void; replay: () => void };
 
-  const fail = (msg: string) => {
-    intro.hidden = true;
-    hint.hidden = true;
-    errorBox.hidden = false;
-    errorMsg.textContent = msg;
+  const $ = (id: string) => document.getElementById(id)!;
+  const intro = $('ar-intro');
+  const loading = $('ar-loading');
+  const hint = $('ar-hint');
+  const cta = $('ar-cta');
+  const fallback = $('ar-fallback');
+  const fallbackMsg = $('ar-fallback-msg');
+  const startBtn = $('ar-start') as HTMLButtonElement;
+  const replayBtn = $('ar-replay') as HTMLButtonElement;
+  const copyBtn = $('ar-copy') as HTMLButtonElement;
+  const container = $('ar-container');
+
+  // lightweight funnel hook — dispatches a window event per step. A real sink
+  // (Cloudflare Pages Function) can listen/forward later; harmless until then.
+  const track = (name: string) =>
+    dispatchEvent(new CustomEvent('ar:event', { detail: { name } }));
+  for (const el of document.querySelectorAll<HTMLElement>('[data-ev]')) {
+    el.addEventListener('click', () => track(el.dataset.ev!));
+  }
+
+  const show = (el: HTMLElement) => (el.hidden = false);
+  const hide = (el: HTMLElement) => (el.hidden = true);
+
+  const isWebview = /(FBAN|FBAV|Instagram|LinkedInApp|Messenger|\bLine\/|Twitter|TikTok|Snapchat|GSA)/i.test(
+    navigator.userAgent,
+  );
+  const hasCamera = window.isSecureContext && !!navigator.mediaDevices?.getUserMedia;
+  const hasWebGL = (() => {
+    try {
+      const c = document.createElement('canvas');
+      return !!(c.getContext('webgl2') || c.getContext('webgl'));
+    } catch {
+      return false;
+    }
+  })();
+
+  const showFallback = (msg: string, offerCopy = false) => {
+    hide(intro);
+    hide(loading);
+    hide(hint);
+    hide(cta);
+    fallbackMsg.textContent = msg;
+    copyBtn.hidden = !offerCopy;
+    show(fallback);
   };
 
-  startBtn.addEventListener('click', async () => {
-    startBtn.disabled = true;
-    startBtn.textContent = 'Spouštím… · Loading…';
+  if (isWebview) {
+    // in-app browsers (IG/LinkedIn/…) block the camera — send them to a real browser
+    track('unsupported_webview');
+    showFallback(
+      'AR potřebuje Safari/Chrome — otevři tam jkvapil.cz/ar. Zatím si ulož kontakt. · Open jkvapil.cz/ar in Safari/Chrome for AR.',
+      true,
+    );
+  } else if (!hasCamera || !hasWebGL) {
+    track('unsupported');
+    showFallback(
+      'Tvůj prohlížeč AR nepodporuje — ale kontakt si ulož. · AR unsupported here — grab the contact.',
+    );
+  } else {
+    show(intro);
+    startBtn.addEventListener('click', async () => {
+      startBtn.disabled = true;
+      hide(intro);
+      show(loading);
+      track('ar_start');
+      try {
+        const mod = (await import('../scripts/ar')) as { start: (c: HTMLElement, o?: object) => Promise<ARHandle> };
+        const handle = await mod.start(container, {
+          onComplete: () => {
+            track('story_complete');
+            hide(hint);
+            show(cta);
+          },
+        });
+        hide(loading);
+        show(hint);
+        replayBtn.addEventListener('click', () => {
+          handle.replay();
+          hide(cta);
+          show(hint);
+        });
+      } catch (e) {
+        const err = e as { name?: string; message?: string };
+        showFallback(
+          err?.name === 'NotAllowedError'
+            ? 'Kamera odepřena. Povol ji v prohlížeči a načti znovu. · Camera denied — allow it and reload.'
+            : 'Kameru se nepodařilo spustit. · Could not start the camera.',
+        );
+      }
+    });
+  }
+
+  copyBtn?.addEventListener('click', async () => {
     try {
-      const { start } = await import('../scripts/ar');
-      await start(container);
-      intro.hidden = true;
-      hint.hidden = false;
-    } catch (e) {
-      const err = e as { name?: string; message?: string };
-      const denied = err?.name === 'NotAllowedError';
-      fail(
-        denied
-          ? 'Přístup ke kameře byl odepřen. Povol kameru v prohlížeči a zkus to znovu.'
-          : err?.message || 'Zkus to prosím v jiném prohlížeči (Safari / Chrome).',
-      );
+      await navigator.clipboard.writeText(location.href);
+      copyBtn.textContent = 'Zkopírováno ✓';
+    } catch {
+      copyBtn.textContent = location.href;
     }
   });
 </script>

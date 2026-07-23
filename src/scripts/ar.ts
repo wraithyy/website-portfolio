@@ -26,8 +26,8 @@ const SOCKET = '#050504';
 // MindAR One-Euro pose filter. Lower minCF = steadier when still; lower beta =
 // smoother during motion (more lag). These are the real anti-jitter controls now.
 const FILTER_MIN_CF = 0.0001;
-const FILTER_BETA = 2;
-const MISS_TOLERANCE = 5;
+const FILTER_BETA = 1; // lower = less jitter during motion (target asymmetry does the rest)
+const MISS_TOLERANCE = 10; // ride through brief blur/occlusion instead of blinking out
 const WARMUP_TOLERANCE = 3;
 // timings run at ~80% speed (slowed from the first cut)
 const RISE_MS = 1375; // monogram grow-in (bars staggered within)
@@ -75,7 +75,7 @@ const AMBIENT_COUNT = 55;
 const BURST_MS = 900;
 const BURST_EVERY_MS = 2600;
 
-type Handle = { stop: () => void };
+type Handle = { stop: () => void; replay: () => void };
 type Ctx2D = CanvasRenderingContext2D;
 
 function fitFont(ctx: Ctx2D, text: string, family: string, maxW: number, startPx: number) {
@@ -294,6 +294,36 @@ function makeAmbient() {
   );
 }
 
+// soft radial "contact shadow" that grounds the risen content on the card
+function makeContactShadow(worldW: number, worldH: number) {
+  const px = 256;
+  const canvas = document.createElement('canvas');
+  canvas.width = px;
+  canvas.height = px;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('2d canvas context unavailable');
+  const g = ctx.createRadialGradient(px / 2, px / 2, 0, px / 2, px / 2, px / 2);
+  g.addColorStop(0, 'rgba(0,0,0,0.55)');
+  g.addColorStop(0.55, 'rgba(0,0,0,0.22)');
+  g.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, px, px);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return new THREE.Mesh(
+    new THREE.PlaneGeometry(worldW, worldH),
+    new THREE.MeshBasicMaterial({ map: texture, transparent: true, depthWrite: false, opacity: 0 }),
+  );
+}
+
+const buzz = (pattern: number | number[]) => {
+  try {
+    navigator.vibrate?.(pattern);
+  } catch {
+    /* haptics unsupported — ignore */
+  }
+};
+
 const easeOutBack = (t: number) => {
   const c1 = 1.70158;
   const c3 = c1 + 1;
@@ -302,7 +332,10 @@ const easeOutBack = (t: number) => {
 const clamp01 = (t: number) => Math.max(0, Math.min(1, t));
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 
-export async function start(container: HTMLElement): Promise<Handle> {
+export async function start(
+  container: HTMLElement,
+  opts: { onComplete?: () => void } = {},
+): Promise<Handle> {
   try {
     await document.fonts.ready;
   } catch {
@@ -333,6 +366,10 @@ export async function start(container: HTMLElement): Promise<Handle> {
 
   root.add(makeOccluder());
 
+  const shadow = makeContactShadow(0.75, 0.62);
+  shadow.position.z = 0.002;
+  root.add(shadow);
+
   const { group: monogram, bars, barMats, accent } = buildMonogram();
   root.add(monogram);
 
@@ -362,6 +399,7 @@ export async function start(container: HTMLElement): Promise<Handle> {
   let stepShownAt = 0;
   let lastReveal = -1;
   let complete = false;
+  let buzzedComplete = false;
   let tappable = false; // true once the button has emerged (independent of story end)
   let lastBurst = -BURST_EVERY_MS;
   let pressing = 0;
@@ -388,6 +426,7 @@ export async function start(container: HTMLElement): Promise<Handle> {
     raycaster.setFromCamera(p, camera);
     if (raycaster.intersectObjects([btn.solid, btn.hit], true).length > 0) {
       pressing = performance.now();
+      buzz(18);
       setTimeout(() => {
         window.location.href = `mailto:${email}`;
       }, 220);
@@ -421,9 +460,15 @@ export async function start(container: HTMLElement): Promise<Handle> {
       const e = easeOutBack(r);
       // centre travels from fully sunk (top at surface) to sitting on the card
       bars[i].position.z = lerp(-MONO_DEPTH / 2, MONO_DEPTH / 2, e) + bob * r;
-      if (r >= 1 && landAt[i] < 0) landAt[i] = clock;
+      if (r >= 1 && landAt[i] < 0) {
+        landAt[i] = clock;
+        buzz(8); // tick as each bar seats
+      }
       barMats[i].emissiveIntensity = landAt[i] < 0 ? 0 : clamp01(1 - (clock - landAt[i]) / 320) * 0.9;
     }
+
+    const shadowMat = shadow.material;
+    if (shadowMat instanceof THREE.MeshBasicMaterial) shadowMat.opacity = clamp01(clock / RISE_MS) * 0.9;
 
     const stageF = (clock - RISE_MS) / STEP_MS;
     const step = Math.floor(stageF);
@@ -439,6 +484,7 @@ export async function start(container: HTMLElement): Promise<Handle> {
         painted = shown;
         stepShownAt = clock;
         lastReveal = -1;
+        buzz(12); // firmer pulse per story beat
       }
       const note = STEPS[shown].note;
       const reveal = Math.min(note.length, Math.floor((clock - stepShownAt) / TYPE_MS));
@@ -478,6 +524,11 @@ export async function start(container: HTMLElement): Promise<Handle> {
       }
       if (complete) accent.emissiveIntensity = 0.5 + 0.4 * Math.sin(now / 280);
 
+      if (complete && !buzzedComplete) {
+        buzzedComplete = true;
+        buzz([18, 50, 28]); // triple-buzz payoff on ship
+        opts.onComplete?.();
+      }
       if (complete) {
         if (clock - lastBurst >= BURST_EVERY_MS) lastBurst = clock;
         const age = clock - lastBurst;
@@ -505,6 +556,20 @@ export async function start(container: HTMLElement): Promise<Handle> {
   for (const t of [250, 800, 1500]) setTimeout(kickResize, t);
 
   return {
+    replay: () => {
+      clock = 0;
+      last = performance.now();
+      landAt.fill(-1);
+      painted = -1;
+      lastReveal = -1;
+      stepShownAt = 0;
+      complete = false;
+      buzzedComplete = false;
+      tappable = false;
+      lastBurst = -BURST_EVERY_MS;
+      sparks.points.visible = false;
+      btn.halo.visible = false;
+    },
     stop: () => {
       renderer.setAnimationLoop(null);
       window.removeEventListener('pointerdown', onTap, true);
