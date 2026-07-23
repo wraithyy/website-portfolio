@@ -25,8 +25,8 @@ const SOCKET = '#050504';
 // --- tuning knobs (safe to tweak on-device) ---------------------------------
 // MindAR One-Euro pose filter. Lower minCF = steadier when still; lower beta =
 // smoother during motion (more lag). These are the real anti-jitter controls now.
-const FILTER_MIN_CF = 0.00008;
-const FILTER_BETA = 2;
+const FILTER_MIN_CF = 0.00004;
+const FILTER_BETA = 1.5;
 const MISS_TOLERANCE = 5;
 const WARMUP_TOLERANCE = 3;
 // timings run at ~80% speed (slowed from the first cut)
@@ -496,6 +496,14 @@ export async function start(container: HTMLElement): Promise<Handle> {
   });
 
   await mindarThree.start(); // prompts for camera
+
+  // MindAR computes the cover-size once at start; if the container wasn't fully
+  // laid out yet the video letterboxes. Kick a resize once things settle so it
+  // recomputes against the real full-screen dimensions.
+  const kickResize = () => window.dispatchEvent(new Event('resize'));
+  requestAnimationFrame(kickResize);
+  setTimeout(kickResize, 250);
+  setTimeout(kickResize, 800);
 
   return {
     stop: () => {
