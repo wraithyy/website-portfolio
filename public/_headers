@@ -5,6 +5,11 @@
   Permissions-Policy: camera=(), microphone=(), geolocation=()
   Strict-Transport-Security: max-age=31536000; includeSubDomains
 
-# AR business-card route needs the camera; scope it here, keep it off everywhere else
+# AR business-card route needs the camera; scope it here, keep it off everywhere else.
+# The page is served at /ar/ (trailing slash), so match that AND the /ar redirect.
 /ar
+  Permissions-Policy: camera=(self), microphone=(), geolocation=()
+/ar/
+  Permissions-Policy: camera=(self), microphone=(), geolocation=()
+/ar/*
   Permissions-Policy: camera=(self), microphone=(), geolocation=()
