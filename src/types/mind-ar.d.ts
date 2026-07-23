@@ -15,6 +15,11 @@ declare module 'mind-ar/dist/mindar-image-three.prod.js' {
     uiScanning?: string;
     uiLoading?: string;
     uiError?: string;
+    // One-Euro pose-filter + detection tolerances (jitter/flicker tuning)
+    filterMinCF?: number;
+    filterBeta?: number;
+    missTolerance?: number;
+    warmupTolerance?: number;
   }
 
   export class MindARThree {
