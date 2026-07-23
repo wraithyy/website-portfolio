@@ -1,15 +1,16 @@
 /* WebAR business-card experience.
    Point the camera at the back of the printed card (compiled into
    public/ar/card.mind) and a story emerges FROM the card: the JK monogram
-   rises bar by bar out of the paper, then — mirroring the site's StoryHero —
-   an angular 3D button is assembled from flying blocks above a recessed socket
-   in the card, gaining reality through the way Josef builds, ending as a
-   tappable "Napiš mi →" that presses down into its hole (mailto).
+   rises up through the paper surface, then — mirroring the site's StoryHero —
+   an angular button is assembled from flying blocks and lifts out of a recessed
+   socket, ending as a tappable "Napiš mi →" that presses back into the hole.
 
-   Anti-jitter WITHOUT lag: content lives in a scene-level group whose pose is
-   smoothed toward the detected anchor with an ADAPTIVE factor — heavy damping
-   when the card is still, snappy tracking when the phone moves — and it hides
-   whenever the card leaves the frame (never floats loose in space).
+   Architecture notes (learned the hard way):
+   - Content lives INSIDE anchor.group — MindAR owns the pose (its One-Euro
+     filter is well tuned) and auto-hides the group when the card leaves frame.
+     No hand-rolled smoothing layer fighting it.
+   - A depth-only occluder plane on the card surface hides whatever is "below"
+     it, so objects rising from under z=0 genuinely appear to come out of the card.
    Loaded lazily from ar.astro, mirroring the Konami egg. */
 import * as THREE from 'three';
 // mind-ar treats `three` as a peer dep, so this shares the app's single THREE instance
@@ -22,21 +23,18 @@ const INK = '#121110';
 const SOCKET = '#050504';
 
 // --- tuning knobs (safe to tweak on-device) ---------------------------------
-const FILTER_MIN_CF = 0.0001; // MindAR One-Euro: lower = steadier when still
-const FILTER_BETA = 3;
+// MindAR One-Euro pose filter. Lower minCF = steadier when still; lower beta =
+// smoother during motion (more lag). These are the real anti-jitter controls now.
+const FILTER_MIN_CF = 0.00008;
+const FILTER_BETA = 2;
 const MISS_TOLERANCE = 5;
 const WARMUP_TOLERANCE = 3;
-// adaptive pose low-pass: k = clamp(MIN + change*GAIN, MIN, 1) per frame.
-// MIN governs stillness (low = no jitter); GAIN governs catch-up on real motion.
-const SMOOTH_MIN = 0.1;
-const POS_GAIN = 16;
-const ROT_GAIN = 8;
 const RISE_MS = 1100; // monogram grow-in (bars staggered within)
 const BAR_STAGGER_MS = 130;
 const STEP_MS = 1400; // per story beat
 const TYPE_MS = 42; // typewriter speed per character
-const HOVER_AMP = 0.01;
-const HOVER_HZ = 0.32;
+const HOVER_AMP = 0.008;
+const HOVER_HZ = 0.3;
 
 // --- JK monogram bars, straight from the logo SVG (viewBox 0 0 132 168) ---
 const BARS: [number, number, number, number, boolean][] = [
@@ -49,8 +47,8 @@ const BARS: [number, number, number, number, boolean][] = [
 const VB_W = 132;
 const VB_H = 168;
 const MONO_WIDTH = 0.24;
-const MONO_DEPTH = 0.06;
-const MONO_Y = 0.14; // upper area of the card
+const MONO_DEPTH = 0.11; // tall enough that rising out of the card reads clearly
+const MONO_Y = 0.13;
 
 // --- story beats (condensed from src/data/story.ts, CS to match the card) ---
 const STEPS = [
@@ -63,25 +61,22 @@ const STEPS = [
 ];
 const CTA_LABEL = 'Napiš mi →';
 
-// angular button sitting above a recessed socket, lower-centre on the card
 const BTN_W = 0.34;
 const BTN_H = 0.12;
-const BTN_DEPTH = 0.05;
-const BTN_Y = -0.1;
-const BTN_LIFT = 0.07; // rest height above the socket
-const BTN_SUNK = 0.012; // height when pressed into the hole
-const SOCKET_M = 0.05; // socket margin around the button
+const BTN_DEPTH = 0.06;
+const BTN_Y = -0.11;
+const BTN_LIFT = 0.08; // hover height above the socket when built
+const SOCKET_M = 0.05;
 
 const BLOCK_COUNT = 6;
 const SPARK_COUNT = 46;
-const AMBIENT_COUNT = 60;
+const AMBIENT_COUNT = 55;
 const BURST_MS = 900;
 const BURST_EVERY_MS = 2600;
 
 type Handle = { stop: () => void };
 type Ctx2D = CanvasRenderingContext2D;
 
-/** Shrink the font until `text` fits `maxW`; sets ctx.font and returns px. */
 function fitFont(ctx: Ctx2D, text: string, family: string, maxW: number, startPx: number) {
   let px = startPx;
   ctx.font = `${px}px ${family}`;
@@ -93,10 +88,23 @@ function fitFont(ctx: Ctx2D, text: string, family: string, maxW: number, startPx
 }
 
 function rectOutline(w: number, h: number, color: string) {
-  return new THREE.LineSegments(
+  const line = new THREE.LineSegments(
     new THREE.EdgesGeometry(new THREE.PlaneGeometry(w, h)),
     new THREE.LineBasicMaterial({ color }),
   );
+  return line;
+}
+
+/** Invisible depth-only plane on the card surface — anything behind it (below
+    the paper) is culled, so risen content appears to emerge from the card. */
+function makeOccluder() {
+  const mesh = new THREE.Mesh(
+    new THREE.PlaneGeometry(1.6, 1.1),
+    new THREE.MeshBasicMaterial({ colorWrite: false }),
+  );
+  mesh.position.z = -0.001;
+  mesh.renderOrder = -1;
+  return mesh;
 }
 
 function buildMonogram() {
@@ -109,13 +117,12 @@ function buildMonogram() {
       color: isAccent ? VERMILION : CREAM,
       roughness: 0.4,
       metalness: 0.05,
-      emissive: isAccent ? VERMILION : CREAM, // intensity 0 until it seats / ships
+      emissive: isAccent ? VERMILION : CREAM,
       emissiveIntensity: 0,
     });
     const mesh = new THREE.Mesh(new THREE.BoxGeometry(w * s, h * s, MONO_DEPTH), mat);
     mesh.position.x = (x + w / 2 - VB_W / 2) * s;
     mesh.position.y = -(y + h / 2 - VB_H / 2) * s;
-    mesh.scale.z = 0.001;
     group.add(mesh);
     bars.push(mesh);
     barMats.push(mat);
@@ -145,25 +152,20 @@ function makeCanvasPlane(worldW: number, pxW: number, pxH: number) {
   return { mesh, paint };
 }
 
-/** Angular button + a recessed socket ("hole") it presses into. */
+/** Angular button + recessed socket + a generous invisible tap target. */
 function build3DButton() {
   const group = new THREE.Group();
 
-  // socket: a dark inset in the card with a bright rim — reads as a hole/slot
   const socket = new THREE.Group();
   const floor = new THREE.Mesh(
     new THREE.PlaneGeometry(BTN_W + SOCKET_M, BTN_H + SOCKET_M),
     new THREE.MeshBasicMaterial({ color: SOCKET }),
   );
-  floor.position.z = 0.001;
   const rim = rectOutline(BTN_W + SOCKET_M, BTN_H + SOCKET_M, CREAM);
-  rim.position.z = 0.003;
-  const innerRim = rectOutline(BTN_W + 0.012, BTN_H + 0.012, '#3a3733');
-  innerRim.position.z = 0.002;
-  socket.add(floor, rim, innerRim);
+  rim.position.z = 0.002;
+  socket.add(floor, rim);
 
-  // the button itself — a sharp box (brand rule: 90° edges, no rounding)
-  const geo = new THREE.BoxGeometry(BTN_W, BTN_H, BTN_DEPTH);
+  const geo = new THREE.BoxGeometry(BTN_W, BTN_H, BTN_DEPTH); // sharp: brand 90° edges
   const solid = new THREE.Mesh(
     geo,
     new THREE.MeshStandardMaterial({
@@ -174,13 +176,11 @@ function build3DButton() {
       emissiveIntensity: 0,
     }),
   );
-  solid.scale.setScalar(0.001);
 
   const edges = new THREE.LineSegments(
     new THREE.EdgesGeometry(geo),
     new THREE.LineBasicMaterial({ color: CREAM }),
   );
-  edges.position.z = BTN_LIFT;
 
   const ring = rectOutline(BTN_W + 0.04, BTN_H + 0.04, VERMILION);
   ring.visible = false;
@@ -199,12 +199,19 @@ function build3DButton() {
     c.fillText(CTA_LABEL, c.canvas.width / 2, c.canvas.height / 2 + 6);
   });
   label.mesh.position.z = BTN_DEPTH / 2 + 0.004;
-  solid.add(label.mesh); // rides the button (incl. into the hole on press)
-  label.mesh.visible = true;
+  solid.add(label.mesh);
+
+  // large invisible plane so the button is easy to tap even with wobble
+  const hit = new THREE.Mesh(
+    new THREE.PlaneGeometry(BTN_W * 1.5, BTN_H * 2),
+    new THREE.MeshBasicMaterial({ visible: false }),
+  );
+  hit.position.z = BTN_DEPTH / 2 + 0.01;
+  solid.add(hit);
 
   group.add(socket, solid, edges, ring, halo);
   group.position.set(0, BTN_Y, 0);
-  return { group, socket, solid, edges, ring, halo, labelMesh: label.mesh };
+  return { group, socket, solid, edges, ring, halo, hit };
 }
 
 function makeAssembly() {
@@ -214,7 +221,7 @@ function makeAssembly() {
     const mat = new THREE.MeshStandardMaterial({ color: CREAM, roughness: 0.5, transparent: true });
     const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.04, 0.04), mat);
     const a = (i / BLOCK_COUNT) * Math.PI * 2;
-    const from = new THREE.Vector3(Math.cos(a) * 0.18, Math.sin(a) * 0.12, 0.12 + (i % 3) * 0.05);
+    const from = new THREE.Vector3(Math.cos(a) * 0.18, Math.sin(a) * 0.12, 0.14 + (i % 3) * 0.05);
     group.add(mesh);
     blocks.push({ mesh, from });
   }
@@ -269,7 +276,7 @@ function makeAmbient() {
   for (let i = 0; i < AMBIENT_COUNT; i++) {
     positions[i * 3] = (((i * 37) % 100) / 100 - 0.5) * 0.8;
     positions[i * 3 + 1] = (((i * 53) % 100) / 100 - 0.5) * 0.7;
-    positions[i * 3 + 2] = (((i * 29) % 100) / 100) * 0.2;
+    positions[i * 3 + 2] = (((i * 29) % 100) / 100) * 0.18 + 0.02;
   }
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
@@ -279,7 +286,7 @@ function makeAmbient() {
       color: CREAM,
       size: 0.005,
       transparent: true,
-      opacity: 0.3,
+      opacity: 0.28,
       sizeAttenuation: true,
       depthWrite: false,
     }),
@@ -292,6 +299,7 @@ const easeOutBack = (t: number) => {
   return 1 + c3 * (t - 1) ** 3 + c1 * (t - 1) ** 2;
 };
 const clamp01 = (t: number) => Math.max(0, Math.min(1, t));
+const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 
 export async function start(container: HTMLElement): Promise<Handle> {
   try {
@@ -320,17 +328,16 @@ export async function start(container: HTMLElement): Promise<Handle> {
   scene.add(key);
 
   const anchor = mindarThree.addAnchor(0);
+  const root = anchor.group; // MindAR poses this and toggles its visibility
 
-  const stage = new THREE.Group();
-  stage.visible = false;
-  scene.add(stage);
+  root.add(makeOccluder());
 
   const { group: monogram, bars, barMats, accent } = buildMonogram();
-  stage.add(monogram);
+  root.add(monogram);
 
   const btn = build3DButton();
   btn.group.visible = false;
-  stage.add(btn.group);
+  root.add(btn.group);
 
   const assembly = makeAssembly();
   btn.group.add(assembly.group);
@@ -338,17 +345,16 @@ export async function start(container: HTMLElement): Promise<Handle> {
   const sparks = makeSparks();
   sparks.points.position.set(0, BTN_Y, BTN_LIFT);
   sparks.points.visible = false;
-  stage.add(sparks.points);
+  root.add(sparks.points);
 
-  stage.add(makeAmbient());
+  root.add(makeAmbient());
 
   const caption = makeCanvasPlane(0.46, 640, 150);
-  caption.mesh.position.set(0, -0.33, 0.02);
+  caption.mesh.position.set(0, -0.31, 0.02);
   caption.mesh.visible = false;
-  stage.add(caption.mesh);
+  root.add(caption.mesh);
 
   let found = false;
-  let posed = false;
   let clock = 0;
   let last = 0;
   let painted = -1;
@@ -361,7 +367,6 @@ export async function start(container: HTMLElement): Promise<Handle> {
 
   anchor.onTargetFound = () => {
     found = true;
-    posed = false;
     last = performance.now();
   };
   anchor.onTargetLost = () => {
@@ -370,18 +375,18 @@ export async function start(container: HTMLElement): Promise<Handle> {
 
   const raycaster = new THREE.Raycaster();
   const onTap = (e: PointerEvent) => {
-    if (!complete || !stage.visible) return;
+    if (!complete || !found) return;
     const rect = renderer.domElement.getBoundingClientRect();
     const p = new THREE.Vector2(
       ((e.clientX - rect.left) / rect.width) * 2 - 1,
       -((e.clientY - rect.top) / rect.height) * 2 + 1,
     );
     raycaster.setFromCamera(p, camera);
-    if (raycaster.intersectObject(btn.solid, false).length > 0) {
+    if (raycaster.intersectObjects([btn.solid, btn.hit], true).length > 0) {
       pressing = performance.now();
       setTimeout(() => {
         window.location.href = `mailto:${email}`;
-      }, 200);
+      }, 220);
     }
   };
   renderer.domElement.addEventListener('pointerdown', onTap);
@@ -398,63 +403,24 @@ export async function start(container: HTMLElement): Promise<Handle> {
       c.fillText(step.note.slice(0, chars), c.canvas.width / 2, 70);
     });
 
-  const tPos = new THREE.Vector3();
-  const tQuat = new THREE.Quaternion();
-  const tScale = new THREE.Vector3();
-
   renderer.setAnimationLoop(() => {
     const now = performance.now();
-    const bob = Math.sin(((now / 1000) * HOVER_HZ) * Math.PI * 2) * HOVER_AMP;
-    const sway = Math.sin(((now / 1000) * HOVER_HZ) * Math.PI) * 0.04;
-
-    // --- adaptive anti-jitter; hide entirely when the card is gone ---
-    if (found) {
-      clock += now - last;
-      anchor.group.matrix.decompose(tPos, tQuat, tScale);
-      if (!posed) {
-        stage.position.copy(tPos);
-        stage.quaternion.copy(tQuat);
-        posed = true;
-      } else {
-        const posK = THREE.MathUtils.clamp(
-          SMOOTH_MIN + stage.position.distanceTo(tPos) * POS_GAIN,
-          SMOOTH_MIN,
-          1,
-        );
-        const rotK = THREE.MathUtils.clamp(
-          SMOOTH_MIN + stage.quaternion.angleTo(tQuat) * ROT_GAIN,
-          SMOOTH_MIN,
-          1,
-        );
-        stage.position.lerp(tPos, posK);
-        stage.quaternion.slerp(tQuat, rotK);
-      }
-      stage.scale.copy(tScale);
-      stage.visible = true;
-    } else {
-      stage.visible = false; // never leave content floating loose in space
-    }
+    if (found) clock += now - last;
     last = now;
 
-    if (!stage.visible) {
-      renderer.render(scene, camera);
-      return;
-    }
+    const bob = Math.sin(((now / 1000) * HOVER_HZ) * Math.PI * 2) * HOVER_AMP;
 
-    // --- monogram: bars rise out of the card, flash as they seat ---
+    // --- monogram bars rise UP through the card surface (occluder hides the
+    //     sub-surface part), flashing as they clear ---
     for (let i = 0; i < bars.length; i++) {
       const r = clamp01((clock - i * BAR_STAGGER_MS) / RISE_MS);
-      const sz = Math.max(0.001, easeOutBack(r));
-      bars[i].scale.z = sz;
-      bars[i].position.z = (MONO_DEPTH / 2) * sz;
+      const e = easeOutBack(r);
+      // centre travels from fully sunk (top at surface) to sitting on the card
+      bars[i].position.z = lerp(-MONO_DEPTH / 2, MONO_DEPTH / 2, e) + bob * r;
       if (r >= 1 && landAt[i] < 0) landAt[i] = clock;
       barMats[i].emissiveIntensity = landAt[i] < 0 ? 0 : clamp01(1 - (clock - landAt[i]) / 320) * 0.9;
     }
-    const monoRise = clamp01(clock / RISE_MS);
-    monogram.position.z = bob * monoRise;
-    monogram.rotation.y = sway * monoRise;
 
-    // --- story / button ---
     const stageF = (clock - RISE_MS) / STEP_MS;
     const step = Math.floor(stageF);
     const shown = Math.min(STEPS.length - 1, Math.max(0, step));
@@ -477,30 +443,29 @@ export async function start(container: HTMLElement): Promise<Handle> {
         paintCaption(STEPS[shown], reveal);
       }
 
-      // button assembly: blocks gather (step 1), sharp solid rises from the hole (step 2)
-      const grow = step >= 2 ? easeOutBack(clamp01(stageF - 2)) : 0.001;
-      btn.solid.scale.setScalar(grow);
+      // blocks gather (step 1); solid rises out of the socket (step 2+)
+      const emerge = step >= 2 ? clamp01(stageF - 2) : 0;
       btn.solid.visible = step >= 2;
       btn.edges.visible = step < 2;
       btn.ring.visible = step >= 3;
       btn.ring.position.z = BTN_LIFT;
 
+      const press = pressing ? Math.max(0, 1 - (now - pressing) / 220) : 0;
+      // centre travels from inside the hole up to hover height
+      const z = lerp(-BTN_DEPTH / 2, BTN_LIFT, easeOutBack(emerge)) + bob * (emerge > 0 ? 1 : 0);
+      btn.solid.position.z = z - press * (BTN_LIFT + BTN_DEPTH / 2);
+
       const conv = clamp01(stageF - 1);
-      const solidFull = step >= 2 && grow > 0.9;
+      const solidFull = step >= 2 && emerge > 0.85;
       assembly.group.visible = (step === 1 || step === 2) && !solidFull;
       for (const { mesh, from } of assembly.blocks) {
         const spread = 1 - conv;
         mesh.position.set(from.x * spread, from.y * spread, from.z * spread);
-        const sc = step >= 2 ? 1 - grow : 0.25 + 0.75 * conv;
+        const sc = step >= 2 ? 1 - emerge : 0.25 + 0.75 * conv;
         mesh.scale.setScalar(Math.max(0.001, sc));
         const bmat = mesh.material;
-        if (bmat instanceof THREE.MeshStandardMaterial) bmat.opacity = step >= 2 ? 1 - grow : 1;
+        if (bmat instanceof THREE.MeshStandardMaterial) bmat.opacity = step >= 2 ? 1 - emerge : 1;
       }
-
-      // rise out of the hole while forming, then hover; press sinks it in
-      const press = pressing ? Math.max(0, 1 - (now - pressing) / 200) : 0;
-      const restZ = BTN_LIFT * (step >= 2 ? Math.min(1, grow) : 0) + bob * monoRise;
-      btn.solid.position.z = restZ - press * (BTN_LIFT - BTN_SUNK);
 
       const smat = btn.solid.material;
       if (smat instanceof THREE.MeshStandardMaterial) {
@@ -508,7 +473,6 @@ export async function start(container: HTMLElement): Promise<Handle> {
       }
       if (complete) accent.emissiveIntensity = 0.5 + 0.4 * Math.sin(now / 280);
 
-      // --- ship payoff: looping spark burst + expanding square halo ---
       if (complete) {
         if (clock - lastBurst >= BURST_EVERY_MS) lastBurst = clock;
         const age = clock - lastBurst;
