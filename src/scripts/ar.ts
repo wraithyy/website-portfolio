@@ -25,8 +25,8 @@ const SOCKET = '#050504';
 // --- tuning knobs (safe to tweak on-device) ---------------------------------
 // MindAR One-Euro pose filter. Lower minCF = steadier when still; lower beta =
 // smoother during motion (more lag). These are the real anti-jitter controls now.
-const FILTER_MIN_CF = 0.00004;
-const FILTER_BETA = 1.5;
+const FILTER_MIN_CF = 0.0001;
+const FILTER_BETA = 2;
 const MISS_TOLERANCE = 5;
 const WARMUP_TOLERANCE = 3;
 // timings run at ~80% speed (slowed from the first cut)
@@ -502,8 +502,7 @@ export async function start(container: HTMLElement): Promise<Handle> {
   // recomputes against the real full-screen dimensions.
   const kickResize = () => window.dispatchEvent(new Event('resize'));
   requestAnimationFrame(kickResize);
-  setTimeout(kickResize, 250);
-  setTimeout(kickResize, 800);
+  for (const t of [250, 800, 1500]) setTimeout(kickResize, t);
 
   return {
     stop: () => {

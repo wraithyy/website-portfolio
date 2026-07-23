@@ -39,13 +39,15 @@ import Base from '../layouts/Base.astro';
   :global(html),
   :global(body) {
     margin: 0;
-    height: 100%;
     overflow: hidden;
     overscroll-behavior: none;
   }
   .ar {
     position: fixed;
     inset: 0;
+    width: 100vw;
+    height: 100vh; /* fallback */
+    height: 100dvh; /* dynamic viewport — full height on mobile Safari */
     background: var(--ink);
     color: var(--paper);
     overflow: hidden;
