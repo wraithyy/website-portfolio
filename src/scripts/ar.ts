@@ -1,11 +1,13 @@
 /* WebAR business-card experience.
    Point the camera at the back of the printed card (compiled into
    public/ar/card.mind) and a story plays out anchored to the paper:
-   the JK monogram rises, then — mirroring the site's StoryHero — a real 3D
-   button gains reality through the way Josef builds (architecture, types,
-   states, a11y, review, delivery), ending as a tappable "Napiš mi →" (mailto).
-   Everything hovers close to the card and gently floats. Loaded lazily from
-   ar.astro, mirroring the Konami egg. */
+   the JK monogram rises bar by bar, then — mirroring the site's StoryHero — a
+   real 3D button gains reality through the way Josef builds, ending as a
+   tappable "Napiš mi →" (mailto) with sparks, a halo and a glow.
+
+   Anti-jitter: content lives in a scene-level group whose pose is heavily
+   smoothed toward the detected anchor each frame (kills wobble, adds a floaty
+   lag on purpose). Loaded lazily from ar.astro, mirroring the Konami egg. */
 import * as THREE from 'three';
 // mind-ar treats `three` as a peer dep, so this shares the app's single THREE instance
 import { MindARThree } from 'mind-ar/dist/mindar-image-three.prod.js';
@@ -16,15 +18,16 @@ const VERMILION = '#ff5a3c';
 const INK = '#121110';
 
 // --- tuning knobs (safe to tweak on-device) ---------------------------------
-// One-Euro pose filter: lower minCF = steadier when still (less jitter, more lag).
-const FILTER_MIN_CF = 0.0001;
+const FILTER_MIN_CF = 0.0001; // MindAR One-Euro: lower = steadier when still
 const FILTER_BETA = 3;
-const MISS_TOLERANCE = 5; // frames of lost detection tolerated before "lost" (kills flicker)
+const MISS_TOLERANCE = 5;
 const WARMUP_TOLERANCE = 3;
-const RISE_MS = 900; // monogram grow-in
+const SMOOTH = 0.16; // my own pose low-pass (0..1): lower = steadier + floatier
+const RISE_MS = 1100; // monogram grow-in (bars staggered within)
+const BAR_STAGGER_MS = 130;
 const STEP_MS = 1400; // per story beat
-const HOVER_AMP = 0.015; // float bob amplitude (world units)
-const HOVER_HZ = 0.35; // float bob speed
+const HOVER_AMP = 0.014;
+const HOVER_HZ = 0.32;
 
 // --- JK monogram bars, straight from the logo SVG (viewBox 0 0 132 168) ---
 const BARS: [number, number, number, number, boolean][] = [
@@ -50,7 +53,6 @@ const STEPS = [
 ];
 const CTA_LABEL = 'Napiš mi →';
 
-// button geometry (world units), hovering just above the monogram, close to the card
 const BTN_W = 0.4;
 const BTN_H = 0.15;
 const BTN_R = 0.03;
@@ -58,12 +60,18 @@ const BTN_DEPTH = 0.07;
 const BTN_Y = 0.3;
 const BTN_Z = 0.09;
 
+const SPARK_COUNT = 46;
+const AMBIENT_COUNT = 70;
+const BURST_MS = 900;
+const BURST_EVERY_MS = 2600;
+
 type Handle = { stop: () => void };
 type Ctx2D = CanvasRenderingContext2D;
 
 function buildMonogram() {
   const group = new THREE.Group();
   const s = MONO_WIDTH / VB_W;
+  const bars: THREE.Mesh[] = [];
   let accent: THREE.MeshStandardMaterial | null = null;
   for (const [x, y, w, h, isAccent] of BARS) {
     const mat = new THREE.MeshStandardMaterial({
@@ -76,11 +84,13 @@ function buildMonogram() {
     const mesh = new THREE.Mesh(new THREE.BoxGeometry(w * s, h * s, MONO_DEPTH), mat);
     mesh.position.x = (x + w / 2 - VB_W / 2) * s;
     mesh.position.y = -(y + h / 2 - VB_H / 2) * s;
+    mesh.scale.z = 0.001;
     group.add(mesh);
+    bars.push(mesh);
     if (isAccent) accent = mat;
   }
   if (!accent) throw new Error('monogram: accent bar missing');
-  return { group, accent };
+  return { group, bars, accent };
 }
 
 function roundedRectShape(w: number, h: number, r: number) {
@@ -99,7 +109,6 @@ function roundedRectShape(w: number, h: number, r: number) {
   return shape;
 }
 
-/** A plane textured from a repaintable 2D canvas. */
 function makeCanvasPlane(worldW: number, pxW: number, pxH: number) {
   const canvas = document.createElement('canvas');
   canvas.width = pxW;
@@ -123,7 +132,6 @@ function makeCanvasPlane(worldW: number, pxW: number, pxH: number) {
 
 function build3DButton() {
   const group = new THREE.Group();
-
   const shape = roundedRectShape(BTN_W, BTN_H, BTN_R);
   const geo = new THREE.ExtrudeGeometry(shape, {
     depth: BTN_DEPTH,
@@ -137,21 +145,19 @@ function build3DButton() {
     geo,
     new THREE.MeshStandardMaterial({
       color: VERMILION,
-      roughness: 0.35,
-      metalness: 0.1,
+      roughness: 0.3,
+      metalness: 0.25,
       emissive: VERMILION,
       emissiveIntensity: 0,
     }),
   );
   solid.scale.setScalar(0.001);
 
-  // wireframe outline for the "being drawn" stages
   const edges = new THREE.LineSegments(
     new THREE.EdgesGeometry(geo),
     new THREE.LineBasicMaterial({ color: CREAM }),
   );
 
-  // focus ring (a11y) — a larger flat outline that pops in behind the face
   const ringShape = roundedRectShape(BTN_W + 0.06, BTN_H + 0.06, BTN_R + 0.03);
   const ring = new THREE.LineSegments(
     new THREE.EdgesGeometry(new THREE.ShapeGeometry(ringShape)),
@@ -160,7 +166,14 @@ function build3DButton() {
   ring.position.z = BTN_DEPTH / 2 + 0.001;
   ring.visible = false;
 
-  // CTA label on the front face
+  // expanding halo, fired on ship
+  const halo = new THREE.Mesh(
+    new THREE.RingGeometry(BTN_W * 0.55, BTN_W * 0.6, 48),
+    new THREE.MeshBasicMaterial({ color: VERMILION, transparent: true, side: THREE.DoubleSide }),
+  );
+  halo.position.z = BTN_DEPTH / 2 + 0.002;
+  halo.visible = false;
+
   const label = makeCanvasPlane(BTN_W * 0.92, 512, Math.round((512 * BTN_H) / BTN_W));
   label.paint((c) => {
     c.fillStyle = INK;
@@ -172,8 +185,76 @@ function build3DButton() {
   label.mesh.position.z = BTN_DEPTH / 2 + 0.02;
   label.mesh.visible = false;
 
-  group.add(solid, edges, ring, label.mesh);
-  return { group, solid, edges, ring, labelMesh: label.mesh };
+  group.add(solid, edges, ring, halo, label.mesh);
+  return { group, solid, edges, ring, halo, labelMesh: label.mesh };
+}
+
+/** Spark burst that fires from the button on ship and re-fires periodically. */
+function makeSparks() {
+  const dirs: THREE.Vector3[] = [];
+  const speeds: number[] = [];
+  // deterministic spread (no Math.random at module load isn't a concern at runtime,
+  // but keep it varied and stable across frames)
+  for (let i = 0; i < SPARK_COUNT; i++) {
+    const a = (i / SPARK_COUNT) * Math.PI * 2;
+    const tilt = ((i % 5) - 2) * 0.35;
+    dirs.push(new THREE.Vector3(Math.cos(a), Math.sin(a), tilt).normalize());
+    speeds.push(0.28 + (i % 7) * 0.03);
+  }
+  const positions = new Float32Array(SPARK_COUNT * 3);
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  const mat = new THREE.PointsMaterial({
+    color: VERMILION,
+    size: 0.02,
+    transparent: true,
+    opacity: 0,
+    sizeAttenuation: true,
+    depthWrite: false,
+  });
+  const points = new THREE.Points(geo, mat);
+  const update = (age: number) => {
+    const t = age / BURST_MS;
+    if (t >= 1) {
+      mat.opacity = 0;
+      return;
+    }
+    const ease = 1 - (1 - t) ** 2;
+    for (let i = 0; i < SPARK_COUNT; i++) {
+      const d = dirs[i];
+      const r = speeds[i] * ease;
+      positions[i * 3] = d.x * r;
+      positions[i * 3 + 1] = d.y * r;
+      positions[i * 3 + 2] = d.z * r;
+    }
+    geo.attributes.position.needsUpdate = true;
+    mat.opacity = 1 - t;
+  };
+  return { points, update };
+}
+
+/** Faint drifting point field for a sense of depth/space behind the scene. */
+function makeAmbient() {
+  const positions = new Float32Array(AMBIENT_COUNT * 3);
+  for (let i = 0; i < AMBIENT_COUNT; i++) {
+    positions[i * 3] = (((i * 37) % 100) / 100 - 0.5) * 0.9;
+    positions[i * 3 + 1] = (((i * 53) % 100) / 100 - 0.5) * 0.9 + 0.1;
+    positions[i * 3 + 2] = (((i * 29) % 100) / 100) * 0.25 - 0.05;
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  const points = new THREE.Points(
+    geo,
+    new THREE.PointsMaterial({
+      color: CREAM,
+      size: 0.006,
+      transparent: true,
+      opacity: 0.35,
+      sizeAttenuation: true,
+      depthWrite: false,
+    }),
+  );
+  return points;
 }
 
 const easeOutBack = (t: number) => {
@@ -211,29 +292,44 @@ export async function start(container: HTMLElement): Promise<Handle> {
 
   const anchor = mindarThree.addAnchor(0);
 
-  const { group: monogram, accent } = buildMonogram();
-  monogram.scale.z = 0.001;
-  anchor.group.add(monogram);
+  // scene-level holder we smooth toward the anchor pose (anti-jitter)
+  const stage = new THREE.Group();
+  stage.visible = false;
+  scene.add(stage);
+
+  const { group: monogram, bars, accent } = buildMonogram();
+  stage.add(monogram);
 
   const btn = build3DButton();
   btn.group.position.set(0, BTN_Y, BTN_Z);
   btn.group.visible = false;
-  anchor.group.add(btn.group);
+  stage.add(btn.group);
 
-  // step caption below the monogram — close to the card, so it stays steady
+  const sparks = makeSparks();
+  sparks.points.position.set(0, BTN_Y, BTN_Z);
+  sparks.points.visible = false;
+  stage.add(sparks.points);
+
+  const ambient = makeAmbient();
+  stage.add(ambient);
+
   const caption = makeCanvasPlane(0.5, 640, 150);
   caption.mesh.position.set(0, -0.3, 0.03);
   caption.mesh.visible = false;
-  anchor.group.add(caption.mesh);
+  stage.add(caption.mesh);
 
   let found = false;
+  let posed = false; // have we snapped to the anchor since acquiring?
   let clock = 0;
   let last = 0;
   let painted = -1;
   let complete = false;
+  let shipAt = -1; // clock time the button shipped
+  let lastBurst = -BURST_EVERY_MS;
 
   anchor.onTargetFound = () => {
     found = true;
+    posed = false;
     last = performance.now();
   };
   anchor.onTargetLost = () => {
@@ -241,6 +337,7 @@ export async function start(container: HTMLElement): Promise<Handle> {
   };
 
   const raycaster = new THREE.Raycaster();
+  let pressing = 0;
   const onTap = (e: PointerEvent) => {
     if (!complete) return;
     const rect = renderer.domElement.getBoundingClientRect();
@@ -250,7 +347,10 @@ export async function start(container: HTMLElement): Promise<Handle> {
     );
     raycaster.setFromCamera(p, camera);
     if (raycaster.intersectObject(btn.solid, false).length > 0) {
-      window.location.href = `mailto:${email}`;
+      pressing = performance.now();
+      setTimeout(() => {
+        window.location.href = `mailto:${email}`;
+      }, 180);
     }
   };
   renderer.domElement.addEventListener('pointerdown', onTap);
@@ -267,28 +367,54 @@ export async function start(container: HTMLElement): Promise<Handle> {
       c.fillText(step.note, c.canvas.width / 2, 66);
     });
 
+  const tPos = new THREE.Vector3();
+  const tQuat = new THREE.Quaternion();
+  const tScale = new THREE.Vector3();
+
   renderer.setAnimationLoop(() => {
     const now = performance.now();
-    const bob = Math.sin(now / 1000 * HOVER_HZ * Math.PI * 2) * HOVER_AMP;
-    const sway = Math.sin(now / 1000 * HOVER_HZ * Math.PI) * 0.05;
+    const bob = Math.sin(((now / 1000) * HOVER_HZ) * Math.PI * 2) * HOVER_AMP;
+    const sway = Math.sin(((now / 1000) * HOVER_HZ) * Math.PI) * 0.06;
 
+    // --- anti-jitter: smooth stage toward the detected anchor pose ---
     if (found) {
       clock += now - last;
+      anchor.group.matrix.decompose(tPos, tQuat, tScale);
+      if (!posed) {
+        stage.position.copy(tPos);
+        stage.quaternion.copy(tQuat);
+        posed = true;
+      } else {
+        stage.position.lerp(tPos, SMOOTH);
+        stage.quaternion.slerp(tQuat, SMOOTH);
+      }
+      stage.scale.copy(tScale);
+      stage.visible = true;
     }
     last = now;
 
-    // monogram rises, then floats
-    const rise = clamp01(clock / RISE_MS);
-    monogram.scale.z = Math.max(0.001, easeOutBack(rise));
-    monogram.position.z = (MONO_DEPTH / 2) * monogram.scale.z + bob * rise;
-    monogram.rotation.y = sway * rise;
+    // --- monogram: bars rise staggered, whole group floats + sways ---
+    for (let i = 0; i < bars.length; i++) {
+      const r = clamp01((clock - i * BAR_STAGGER_MS) / RISE_MS);
+      const sz = Math.max(0.001, easeOutBack(r));
+      bars[i].scale.z = sz;
+      bars[i].position.z = (MONO_DEPTH / 2) * sz;
+    }
+    const monoRise = clamp01(clock / RISE_MS);
+    monogram.position.z = bob * monoRise;
+    monogram.rotation.y = sway * monoRise;
+    monogram.rotation.x = bob * 0.4;
 
-    const stageF = (clock - RISE_MS) / STEP_MS; // fractional stage
-    const stage = Math.floor(stageF);
-    const shown = Math.min(STEPS.length - 1, Math.max(0, stage));
-    complete = stage >= STEPS.length - 1;
+    ambient.rotation.z = (now / 1000) * 0.05;
+    ambient.rotation.y = sway * 0.5;
 
+    // --- story / button ---
+    const stageF = (clock - RISE_MS) / STEP_MS;
+    const step = Math.floor(stageF);
+    const shown = Math.min(STEPS.length - 1, Math.max(0, step));
+    complete = step >= STEPS.length - 1;
     const active = clock >= RISE_MS;
+
     btn.group.visible = active;
     caption.mesh.visible = active;
 
@@ -297,23 +423,38 @@ export async function start(container: HTMLElement): Promise<Handle> {
         painted = shown;
         paintCaption(STEPS[shown]);
       }
-      // 3D button assembly: wireframe until stage 2, then the solid grows in
-      btn.solid.scale.setScalar(stage >= 2 ? easeOutBack(clamp01(stageF - 2)) : 0.001);
-      btn.solid.visible = stage >= 2;
-      btn.edges.visible = stage < 2;
-      btn.labelMesh.visible = stage >= 2;
-      btn.ring.visible = stage >= 3;
+      const grow = step >= 2 ? easeOutBack(clamp01(stageF - 2)) : 0.001;
+      btn.solid.scale.setScalar(grow);
+      btn.solid.visible = step >= 2;
+      btn.edges.visible = step < 2;
+      btn.labelMesh.visible = step >= 2;
+      btn.ring.visible = step >= 3;
 
-      // float + gentle tumble
-      btn.group.position.z = BTN_Z + bob;
+      // press feedback
+      const press = pressing ? Math.max(0, 1 - (now - pressing) / 180) : 0;
+      btn.group.position.z = BTN_Z + bob - press * 0.03;
       btn.group.rotation.y = sway;
       btn.group.rotation.x = bob * 0.5;
 
       const mat = btn.solid.material;
       if (mat instanceof THREE.MeshStandardMaterial) {
-        mat.emissiveIntensity = complete ? 0.45 + 0.35 * Math.sin(now / 300) : 0;
+        mat.emissiveIntensity = complete ? 0.5 + 0.35 * Math.sin(now / 280) : 0;
       }
-      accent.emissiveIntensity = complete ? 0.5 + 0.4 * Math.sin(now / 300) : rise * 0.25;
+      accent.emissiveIntensity = complete ? 0.5 + 0.4 * Math.sin(now / 280) : monoRise * 0.25;
+
+      // --- ship effects: sparks + expanding halo, fired on ship then looped ---
+      if (complete && shipAt < 0) shipAt = clock;
+      if (complete) {
+        if (clock - lastBurst >= BURST_EVERY_MS) lastBurst = clock;
+        const age = clock - lastBurst;
+        sparks.points.visible = true;
+        sparks.update(age);
+        const ht = clamp01(age / (BURST_MS * 0.8));
+        btn.halo.visible = ht < 1;
+        btn.halo.scale.setScalar(0.6 + ht * 1.8);
+        const hmat = btn.halo.material;
+        if (hmat instanceof THREE.MeshBasicMaterial) hmat.opacity = (1 - ht) * 0.7;
+      }
     }
 
     renderer.render(scene, camera);
