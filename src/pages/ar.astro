@@ -35,6 +35,14 @@ import Base from '../layouts/Base.astro';
 </Base>
 
 <style>
+  /* full-screen AR route — no page scroll */
+  :global(html),
+  :global(body) {
+    margin: 0;
+    height: 100%;
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
   .ar {
     position: fixed;
     inset: 0;
@@ -45,16 +53,11 @@ import Base from '../layouts/Base.astro';
   .ar__stage {
     position: absolute;
     inset: 0;
+    overflow: hidden;
   }
-  /* mind-ar injects a full-bleed video + canvas; keep them covering the stage */
-  .ar__stage :global(video),
-  .ar__stage :global(canvas) {
-    position: absolute;
-    inset: 0;
-    width: 100% !important;
-    height: 100% !important;
-    object-fit: cover;
-  }
+  /* mind-ar sizes & centres the video/canvas itself (inline px width + negative
+     top/left to cover). Don't override those or it shifts off-centre — just clip
+     any overflow above and lock the page from scrolling. */
   .ar__overlay {
     position: absolute;
     inset: 0;
