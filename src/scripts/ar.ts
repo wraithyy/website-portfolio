@@ -1,13 +1,15 @@
 /* WebAR business-card experience.
    Point the camera at the back of the printed card (compiled into
    public/ar/card.mind) and a story plays out anchored to the paper:
-   the JK monogram rises bar by bar, then — mirroring the site's StoryHero — a
-   real 3D button gains reality through the way Josef builds, ending as a
-   tappable "Napiš mi →" (mailto) with sparks, a halo and a glow.
+   the JK monogram rises bar by bar (each flashing as it seats), then —
+   mirroring the site's StoryHero — a real 3D button is assembled from flying
+   blocks and gains reality through the way Josef builds, ending as a tappable
+   "Napiš mi →" (mailto) with sparks, a halo and a glow.
 
-   Anti-jitter: content lives in a scene-level group whose pose is heavily
-   smoothed toward the detected anchor each frame (kills wobble, adds a floaty
-   lag on purpose). Loaded lazily from ar.astro, mirroring the Konami egg. */
+   Anti-jitter WITHOUT lag: content lives in a scene-level group whose pose is
+   smoothed toward the detected anchor with an ADAPTIVE factor — heavy damping
+   when the card is still (kills wobble), snappy tracking when the phone moves.
+   Loaded lazily from ar.astro, mirroring the Konami egg. */
 import * as THREE from 'three';
 // mind-ar treats `three` as a peer dep, so this shares the app's single THREE instance
 import { MindARThree } from 'mind-ar/dist/mindar-image-three.prod.js';
@@ -22,10 +24,16 @@ const FILTER_MIN_CF = 0.0001; // MindAR One-Euro: lower = steadier when still
 const FILTER_BETA = 3;
 const MISS_TOLERANCE = 5;
 const WARMUP_TOLERANCE = 3;
-const SMOOTH = 0.16; // my own pose low-pass (0..1): lower = steadier + floatier
+// adaptive pose low-pass: k = clamp(MIN + change*GAIN, MIN, 1) per frame.
+// MIN governs stillness (low = no jitter); GAIN governs how fast it catches up
+// to real motion (high = less lag when you turn the phone).
+const SMOOTH_MIN = 0.12;
+const POS_GAIN = 14;
+const ROT_GAIN = 7;
 const RISE_MS = 1100; // monogram grow-in (bars staggered within)
 const BAR_STAGGER_MS = 130;
 const STEP_MS = 1400; // per story beat
+const TYPE_MS = 42; // typewriter speed per character on the caption note
 const HOVER_AMP = 0.014;
 const HOVER_HZ = 0.32;
 
@@ -60,6 +68,7 @@ const BTN_DEPTH = 0.07;
 const BTN_Y = 0.3;
 const BTN_Z = 0.09;
 
+const BLOCK_COUNT = 6;
 const SPARK_COUNT = 46;
 const AMBIENT_COUNT = 70;
 const BURST_MS = 900;
@@ -68,17 +77,28 @@ const BURST_EVERY_MS = 2600;
 type Handle = { stop: () => void };
 type Ctx2D = CanvasRenderingContext2D;
 
+/** Shrink the font until `text` fits `maxW`; sets ctx.font and returns px. */
+function fitFont(ctx: Ctx2D, text: string, family: string, maxW: number, startPx: number) {
+  let px = startPx;
+  ctx.font = `${px}px ${family}`;
+  while (ctx.measureText(text).width > maxW && px > 10) {
+    px -= 3;
+    ctx.font = `${px}px ${family}`;
+  }
+  return px;
+}
+
 function buildMonogram() {
   const group = new THREE.Group();
   const s = MONO_WIDTH / VB_W;
   const bars: THREE.Mesh[] = [];
-  let accent: THREE.MeshStandardMaterial | null = null;
+  const barMats: THREE.MeshStandardMaterial[] = [];
   for (const [x, y, w, h, isAccent] of BARS) {
     const mat = new THREE.MeshStandardMaterial({
       color: isAccent ? VERMILION : CREAM,
       roughness: 0.4,
       metalness: 0.05,
-      emissive: isAccent ? VERMILION : '#000000',
+      emissive: isAccent ? VERMILION : CREAM, // intensity 0 until it seats / ships
       emissiveIntensity: 0,
     });
     const mesh = new THREE.Mesh(new THREE.BoxGeometry(w * s, h * s, MONO_DEPTH), mat);
@@ -87,10 +107,9 @@ function buildMonogram() {
     mesh.scale.z = 0.001;
     group.add(mesh);
     bars.push(mesh);
-    if (isAccent) accent = mat;
+    barMats.push(mat);
   }
-  if (!accent) throw new Error('monogram: accent bar missing');
-  return { group, bars, accent };
+  return { group, bars, barMats, accent: barMats[2] };
 }
 
 function roundedRectShape(w: number, h: number, r: number) {
@@ -166,7 +185,6 @@ function build3DButton() {
   ring.position.z = BTN_DEPTH / 2 + 0.001;
   ring.visible = false;
 
-  // expanding halo, fired on ship
   const halo = new THREE.Mesh(
     new THREE.RingGeometry(BTN_W * 0.55, BTN_W * 0.6, 48),
     new THREE.MeshBasicMaterial({ color: VERMILION, transparent: true, side: THREE.DoubleSide }),
@@ -177,10 +195,10 @@ function build3DButton() {
   const label = makeCanvasPlane(BTN_W * 0.92, 512, Math.round((512 * BTN_H) / BTN_W));
   label.paint((c) => {
     c.fillStyle = INK;
-    c.font = "150px 'Instrument Serif', Georgia, serif";
+    fitFont(c, CTA_LABEL, "'Instrument Serif', Georgia, serif", c.canvas.width * 0.86, 150);
     c.textAlign = 'center';
     c.textBaseline = 'middle';
-    c.fillText(CTA_LABEL, c.canvas.width / 2, c.canvas.height / 2 + 8);
+    c.fillText(CTA_LABEL, c.canvas.width / 2, c.canvas.height / 2 + 6);
   });
   label.mesh.position.z = BTN_DEPTH / 2 + 0.02;
   label.mesh.visible = false;
@@ -189,12 +207,29 @@ function build3DButton() {
   return { group, solid, edges, ring, halo, labelMesh: label.mesh };
 }
 
-/** Spark burst that fires from the button on ship and re-fires periodically. */
+/** Small blocks that fly in and gather into the button as it's "built". */
+function makeAssembly() {
+  const group = new THREE.Group();
+  const blocks: { mesh: THREE.Mesh; from: THREE.Vector3 }[] = [];
+  for (let i = 0; i < BLOCK_COUNT; i++) {
+    const mat = new THREE.MeshStandardMaterial({
+      color: CREAM,
+      roughness: 0.5,
+      transparent: true,
+    });
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.045, 0.045, 0.045), mat);
+    const a = (i / BLOCK_COUNT) * Math.PI * 2;
+    const from = new THREE.Vector3(Math.cos(a) * 0.2, Math.sin(a) * 0.14, (i % 2 ? 1 : -1) * 0.1);
+    group.add(mesh);
+    blocks.push({ mesh, from });
+  }
+  group.visible = false;
+  return { group, blocks };
+}
+
 function makeSparks() {
   const dirs: THREE.Vector3[] = [];
   const speeds: number[] = [];
-  // deterministic spread (no Math.random at module load isn't a concern at runtime,
-  // but keep it varied and stable across frames)
   for (let i = 0; i < SPARK_COUNT; i++) {
     const a = (i / SPARK_COUNT) * Math.PI * 2;
     const tilt = ((i % 5) - 2) * 0.35;
@@ -233,7 +268,6 @@ function makeSparks() {
   return { points, update };
 }
 
-/** Faint drifting point field for a sense of depth/space behind the scene. */
 function makeAmbient() {
   const positions = new Float32Array(AMBIENT_COUNT * 3);
   for (let i = 0; i < AMBIENT_COUNT; i++) {
@@ -243,7 +277,7 @@ function makeAmbient() {
   }
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-  const points = new THREE.Points(
+  return new THREE.Points(
     geo,
     new THREE.PointsMaterial({
       color: CREAM,
@@ -254,7 +288,6 @@ function makeAmbient() {
       depthWrite: false,
     }),
   );
-  return points;
 }
 
 const easeOutBack = (t: number) => {
@@ -292,12 +325,11 @@ export async function start(container: HTMLElement): Promise<Handle> {
 
   const anchor = mindarThree.addAnchor(0);
 
-  // scene-level holder we smooth toward the anchor pose (anti-jitter)
   const stage = new THREE.Group();
   stage.visible = false;
   scene.add(stage);
 
-  const { group: monogram, bars, accent } = buildMonogram();
+  const { group: monogram, bars, barMats, accent } = buildMonogram();
   stage.add(monogram);
 
   const btn = build3DButton();
@@ -305,13 +337,15 @@ export async function start(container: HTMLElement): Promise<Handle> {
   btn.group.visible = false;
   stage.add(btn.group);
 
+  const assembly = makeAssembly();
+  btn.group.add(assembly.group); // rides with the button, gathers to its centre
+
   const sparks = makeSparks();
   sparks.points.position.set(0, BTN_Y, BTN_Z);
   sparks.points.visible = false;
   stage.add(sparks.points);
 
-  const ambient = makeAmbient();
-  stage.add(ambient);
+  stage.add(makeAmbient());
 
   const caption = makeCanvasPlane(0.5, 640, 150);
   caption.mesh.position.set(0, -0.3, 0.03);
@@ -319,13 +353,16 @@ export async function start(container: HTMLElement): Promise<Handle> {
   stage.add(caption.mesh);
 
   let found = false;
-  let posed = false; // have we snapped to the anchor since acquiring?
+  let posed = false;
   let clock = 0;
   let last = 0;
   let painted = -1;
+  let stepShownAt = 0;
+  let lastReveal = -1;
   let complete = false;
-  let shipAt = -1; // clock time the button shipped
   let lastBurst = -BURST_EVERY_MS;
+  let pressing = 0;
+  const landAt = bars.map(() => -1);
 
   anchor.onTargetFound = () => {
     found = true;
@@ -337,7 +374,6 @@ export async function start(container: HTMLElement): Promise<Handle> {
   };
 
   const raycaster = new THREE.Raycaster();
-  let pressing = 0;
   const onTap = (e: PointerEvent) => {
     if (!complete) return;
     const rect = renderer.domElement.getBoundingClientRect();
@@ -355,7 +391,7 @@ export async function start(container: HTMLElement): Promise<Handle> {
   };
   renderer.domElement.addEventListener('pointerdown', onTap);
 
-  const paintCaption = (step: (typeof STEPS)[number]) =>
+  const paintCaption = (step: (typeof STEPS)[number], chars: number) =>
     caption.paint((c) => {
       c.textAlign = 'center';
       c.fillStyle = VERMILION;
@@ -363,8 +399,8 @@ export async function start(container: HTMLElement): Promise<Handle> {
       c.textBaseline = 'top';
       c.fillText(step.label.toUpperCase(), c.canvas.width / 2, 6);
       c.fillStyle = CREAM;
-      c.font = "54px 'Instrument Serif', Georgia, serif";
-      c.fillText(step.note, c.canvas.width / 2, 66);
+      fitFont(c, step.note, "'Instrument Serif', Georgia, serif", c.canvas.width * 0.94, 54);
+      c.fillText(step.note.slice(0, chars), c.canvas.width / 2, 70);
     });
 
   const tPos = new THREE.Vector3();
@@ -376,7 +412,7 @@ export async function start(container: HTMLElement): Promise<Handle> {
     const bob = Math.sin(((now / 1000) * HOVER_HZ) * Math.PI * 2) * HOVER_AMP;
     const sway = Math.sin(((now / 1000) * HOVER_HZ) * Math.PI) * 0.06;
 
-    // --- anti-jitter: smooth stage toward the detected anchor pose ---
+    // --- adaptive anti-jitter: steady when still, snappy when the phone moves ---
     if (found) {
       clock += now - last;
       anchor.group.matrix.decompose(tPos, tQuat, tScale);
@@ -385,28 +421,38 @@ export async function start(container: HTMLElement): Promise<Handle> {
         stage.quaternion.copy(tQuat);
         posed = true;
       } else {
-        stage.position.lerp(tPos, SMOOTH);
-        stage.quaternion.slerp(tQuat, SMOOTH);
+        const posK = THREE.MathUtils.clamp(
+          SMOOTH_MIN + stage.position.distanceTo(tPos) * POS_GAIN,
+          SMOOTH_MIN,
+          1,
+        );
+        const rotK = THREE.MathUtils.clamp(
+          SMOOTH_MIN + stage.quaternion.angleTo(tQuat) * ROT_GAIN,
+          SMOOTH_MIN,
+          1,
+        );
+        stage.position.lerp(tPos, posK);
+        stage.quaternion.slerp(tQuat, rotK);
       }
       stage.scale.copy(tScale);
       stage.visible = true;
     }
     last = now;
 
-    // --- monogram: bars rise staggered, whole group floats + sways ---
+    // --- monogram: bars rise staggered, flash as they seat, group floats ---
     for (let i = 0; i < bars.length; i++) {
       const r = clamp01((clock - i * BAR_STAGGER_MS) / RISE_MS);
       const sz = Math.max(0.001, easeOutBack(r));
       bars[i].scale.z = sz;
       bars[i].position.z = (MONO_DEPTH / 2) * sz;
+      if (r >= 1 && landAt[i] < 0) landAt[i] = clock;
+      const flash = landAt[i] < 0 ? 0 : clamp01(1 - (clock - landAt[i]) / 320) * 0.9;
+      barMats[i].emissiveIntensity = flash;
     }
     const monoRise = clamp01(clock / RISE_MS);
     monogram.position.z = bob * monoRise;
     monogram.rotation.y = sway * monoRise;
     monogram.rotation.x = bob * 0.4;
-
-    ambient.rotation.z = (now / 1000) * 0.05;
-    ambient.rotation.y = sway * 0.5;
 
     // --- story / button ---
     const stageF = (clock - RISE_MS) / STEP_MS;
@@ -419,31 +465,52 @@ export async function start(container: HTMLElement): Promise<Handle> {
     caption.mesh.visible = active;
 
     if (active) {
+      // typewriter caption
       if (shown !== painted) {
         painted = shown;
-        paintCaption(STEPS[shown]);
+        stepShownAt = clock;
+        lastReveal = -1;
       }
+      const note = STEPS[shown].note;
+      const reveal = Math.min(note.length, Math.floor((clock - stepShownAt) / TYPE_MS));
+      if (reveal !== lastReveal) {
+        lastReveal = reveal;
+        paintCaption(STEPS[shown], reveal);
+      }
+
+      // button assembly: blocks gather (step 1), solid grows in (step 2)
       const grow = step >= 2 ? easeOutBack(clamp01(stageF - 2)) : 0.001;
       btn.solid.scale.setScalar(grow);
       btn.solid.visible = step >= 2;
       btn.edges.visible = step < 2;
-      btn.labelMesh.visible = step >= 2;
+      btn.labelMesh.visible = step >= 2 && grow > 0.6;
       btn.ring.visible = step >= 3;
 
-      // press feedback
+      const conv = clamp01(stageF - 1); // 0..1 across step 1
+      const solidFull = step >= 2 && grow > 0.9;
+      assembly.group.visible = (step === 1 || step === 2) && !solidFull;
+      for (const { mesh, from } of assembly.blocks) {
+        const spread = 1 - conv;
+        mesh.position.set(from.x * spread, from.y * spread, from.z * spread);
+        const sc = step >= 2 ? 1 - grow : 0.25 + 0.75 * conv;
+        mesh.scale.setScalar(Math.max(0.001, sc));
+        const mat = mesh.material;
+        if (mat instanceof THREE.MeshStandardMaterial) mat.opacity = step >= 2 ? 1 - grow : 1;
+      }
+
+      // float + press feedback
       const press = pressing ? Math.max(0, 1 - (now - pressing) / 180) : 0;
       btn.group.position.z = BTN_Z + bob - press * 0.03;
       btn.group.rotation.y = sway;
       btn.group.rotation.x = bob * 0.5;
 
-      const mat = btn.solid.material;
-      if (mat instanceof THREE.MeshStandardMaterial) {
-        mat.emissiveIntensity = complete ? 0.5 + 0.35 * Math.sin(now / 280) : 0;
+      const smat = btn.solid.material;
+      if (smat instanceof THREE.MeshStandardMaterial) {
+        smat.emissiveIntensity = complete ? 0.5 + 0.35 * Math.sin(now / 280) : 0;
       }
-      accent.emissiveIntensity = complete ? 0.5 + 0.4 * Math.sin(now / 280) : monoRise * 0.25;
+      if (complete) accent.emissiveIntensity = 0.5 + 0.4 * Math.sin(now / 280);
 
-      // --- ship effects: sparks + expanding halo, fired on ship then looped ---
-      if (complete && shipAt < 0) shipAt = clock;
+      // --- ship payoff: looping spark burst + expanding halo ---
       if (complete) {
         if (clock - lastBurst >= BURST_EVERY_MS) lastBurst = clock;
         const age = clock - lastBurst;
