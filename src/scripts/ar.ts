@@ -29,10 +29,11 @@ const FILTER_MIN_CF = 0.00008;
 const FILTER_BETA = 2;
 const MISS_TOLERANCE = 5;
 const WARMUP_TOLERANCE = 3;
-const RISE_MS = 1100; // monogram grow-in (bars staggered within)
-const BAR_STAGGER_MS = 130;
-const STEP_MS = 1400; // per story beat
-const TYPE_MS = 42; // typewriter speed per character
+// timings run at ~80% speed (slowed from the first cut)
+const RISE_MS = 1375; // monogram grow-in (bars staggered within)
+const BAR_STAGGER_MS = 165;
+const STEP_MS = 1750; // per story beat
+const TYPE_MS = 53; // typewriter speed per character
 const HOVER_AMP = 0.008;
 const HOVER_HZ = 0.3;
 
@@ -361,6 +362,7 @@ export async function start(container: HTMLElement): Promise<Handle> {
   let stepShownAt = 0;
   let lastReveal = -1;
   let complete = false;
+  let tappable = false; // true once the button has emerged (independent of story end)
   let lastBurst = -BURST_EVERY_MS;
   let pressing = 0;
   const landAt = bars.map(() => -1);
@@ -374,8 +376,10 @@ export async function start(container: HTMLElement): Promise<Handle> {
   };
 
   const raycaster = new THREE.Raycaster();
+  // Listen on window (capture) so a tap is never swallowed by MindAR's video /
+  // overlay sitting above the WebGL canvas — the recurring "button won't click".
   const onTap = (e: PointerEvent) => {
-    if (!complete || !found) return;
+    if (!found || !tappable) return;
     const rect = renderer.domElement.getBoundingClientRect();
     const p = new THREE.Vector2(
       ((e.clientX - rect.left) / rect.width) * 2 - 1,
@@ -389,7 +393,7 @@ export async function start(container: HTMLElement): Promise<Handle> {
       }, 220);
     }
   };
-  renderer.domElement.addEventListener('pointerdown', onTap);
+  window.addEventListener('pointerdown', onTap, true);
 
   const paintCaption = (step: (typeof STEPS)[number], chars: number) =>
     caption.paint((c) => {
@@ -449,6 +453,7 @@ export async function start(container: HTMLElement): Promise<Handle> {
       btn.edges.visible = step < 2;
       btn.ring.visible = step >= 3;
       btn.ring.position.z = BTN_LIFT;
+      tappable = step >= 2 && emerge > 0.8; // clickable as soon as it's up
 
       const press = pressing ? Math.max(0, 1 - (now - pressing) / 220) : 0;
       // centre travels from inside the hole up to hover height
@@ -495,7 +500,7 @@ export async function start(container: HTMLElement): Promise<Handle> {
   return {
     stop: () => {
       renderer.setAnimationLoop(null);
-      renderer.domElement.removeEventListener('pointerdown', onTap);
+      window.removeEventListener('pointerdown', onTap, true);
       mindarThree.stop();
       const video = container.querySelector('video');
       const stream = video && video.srcObject instanceof MediaStream ? video.srcObject : null;
