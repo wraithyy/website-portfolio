@@ -29,15 +29,7 @@ import { email, github, linkedin } from '../data/site';
       <p class="ar__sub">Načítám AR… · Loading…</p>
     </div>
 
-    <!-- scanning: shown after camera starts, until the card is found -->
-    <div id="ar-scan" class="ar__scan" hidden>
-      <div class="ar__reticle" aria-hidden="true"></div>
-      <p class="ar__scan-copy label-mono">Namiř na vizitku · dobré světlo, ~20 cm</p>
-    </div>
-
-    <div id="ar-hint" class="ar__hint label-mono" hidden>
-      Drž vizitku v záběru · konec: zmáčkni tlačítko
-    </div>
+    <div id="ar-hint" class="ar__hint label-mono" hidden>hledám vizitku…</div>
 
     <button id="ar-skip" class="ar__skip label-mono" type="button" hidden>Přeskočit →</button>
 
@@ -220,64 +212,6 @@ import { email, github, linkedin } from '../data/site';
     max-width: 26ch;
     margin: 0;
   }
-  /* scanning state: reticle + copy, over the live camera */
-  .ar__scan {
-    position: absolute;
-    inset: 0;
-    z-index: 2;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 1.5rem;
-    pointer-events: none;
-  }
-  .ar__reticle {
-    width: min(62vw, 20rem);
-    aspect-ratio: 85 / 55;
-    border: 1.5px solid color-mix(in srgb, var(--paper) 70%, transparent);
-    position: relative;
-    animation: ar-breathe 1.8s ease-in-out infinite;
-  }
-  .ar__reticle::before,
-  .ar__reticle::after {
-    content: '';
-    position: absolute;
-    width: 1.4rem;
-    height: 1.4rem;
-    border: 2px solid var(--accent);
-  }
-  .ar__reticle::before {
-    top: -2px;
-    left: -2px;
-    border-right: none;
-    border-bottom: none;
-  }
-  .ar__reticle::after {
-    bottom: -2px;
-    right: -2px;
-    border-left: none;
-    border-top: none;
-  }
-  .ar__scan-copy {
-    color: var(--paper);
-    font-size: 0.72rem;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    background: color-mix(in srgb, var(--ink) 70%, transparent);
-    padding: 0.5rem 0.9rem;
-  }
-  @keyframes ar-breathe {
-    0%,
-    100% {
-      opacity: 0.55;
-      transform: scale(1);
-    }
-    50% {
-      opacity: 1;
-      transform: scale(1.02);
-    }
-  }
   .ar__skip {
     position: absolute;
     top: max(1rem, env(safe-area-inset-top));
@@ -309,9 +243,6 @@ import { email, github, linkedin } from '../data/site';
     .ar__spinner {
       animation-duration: 2s;
     }
-    .ar__reticle {
-      animation: none;
-    }
   }
 </style>
 
@@ -322,7 +253,6 @@ import { email, github, linkedin } from '../data/site';
   const $ = (id: string) => document.getElementById(id)!;
   const intro = $('ar-intro');
   const loading = $('ar-loading');
-  const scan = $('ar-scan');
   const hint = $('ar-hint');
   const skipBtn = $('ar-skip') as HTMLButtonElement;
   const cta = $('ar-cta');
@@ -371,7 +301,6 @@ import { email, github, linkedin } from '../data/site';
   const showFallback = (msg: string, offerCopy = false) => {
     hide(intro);
     hide(loading);
-    hide(scan);
     hide(hint);
     hide(skipBtn);
     hide(cta);
@@ -406,36 +335,29 @@ import { email, github, linkedin } from '../data/site';
         };
         const handle = await mod.start(container, {
           onFound: () => {
-            hide(scan);
-            if (done) return;
-            show(hint);
-            show(skipBtn);
+            hide(hint); // card locked — get out of the way
+            if (!done) show(skipBtn);
           },
           onLost: () => {
             if (done) return;
-            hide(hint);
             hide(skipBtn);
-            (scan.querySelector('.ar__scan-copy') as HTMLElement).textContent =
-              'Ztraceno — namiř znovu · Reframe the card';
-            show(scan);
+            show(hint); // subtle "hledám vizitku…" status, no frame / no instructions
           },
           onComplete: () => {
             done = true;
             track('story_complete');
             hide(hint);
             hide(skipBtn);
-            hide(scan);
             show(cta);
           },
         });
         hide(loading);
-        show(scan); // scanning until the card is found
+        show(hint); // searching until the card is found
         skipBtn.addEventListener('click', () => handle.skip());
         replayBtn.addEventListener('click', () => {
           done = false;
           handle.replay();
           hide(cta);
-          show(hint);
           show(skipBtn);
         });
       } catch (e) {

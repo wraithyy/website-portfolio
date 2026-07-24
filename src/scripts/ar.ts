@@ -31,6 +31,7 @@ const FILTER_MIN_CF = 0.0001; // MindAR One-Euro: lower = steadier when still
 const FILTER_BETA = 1;
 const MISS_TOLERANCE = 10; // ride through brief blur without blinking out
 const WARMUP_TOLERANCE = 3;
+const SMOOTH_ROT = 0.4; // rotation damping (lower = steadier, more lag); position stays exact
 const RISE_MS = 1000; // monogram grow-in
 const BAR_STAGGER_MS = 130;
 const STEP_MS = 1100; // per story beat
@@ -320,11 +321,14 @@ export async function start(
   scene.add(fill);
 
   const anchor = mindarThree.addAnchor(0);
-  // Content lives directly in the anchor group — MindAR poses it and toggles its
-  // visibility. (A scene-level "smoothed holder" regressed: it desynced from the
-  // occluder and flung content off-screen. Stability now comes from the flattened
-  // low-profile geometry + MindAR's One-Euro filter, not a custom pose layer.)
-  const holder = anchor.group;
+  // Content lives in a scene-level holder we drive from MindAR's pose: position
+  // copied exactly, rotation damped (slerp) to absorb the jumpy raw pose. Occluder
+  // lives INSIDE the holder too, so the emergence occlusion stays consistent with
+  // the content (the earlier regression left it in anchor.group → desync + fling).
+  // We SNAP on (re)acquire so it never slerps in from a wrong identity rotation.
+  const holder = new THREE.Group();
+  holder.visible = false;
+  scene.add(holder);
   holder.add(makeOccluder());
 
   const ground = makeGround(0.78, 0.42);
@@ -355,6 +359,7 @@ export async function start(
   holder.add(caption.mesh);
 
   let found = false;
+  let posed = false; // snapped to the pose since the last (re)acquire?
   let clock = 0;
   let last = 0;
   let painted = -1;
@@ -370,6 +375,7 @@ export async function start(
 
   anchor.onTargetFound = () => {
     found = true;
+    posed = false; // snap to the fresh pose on the next frame
     last = performance.now();
     opts.onFound?.();
   };
@@ -451,15 +457,29 @@ export async function start(
     },
   };
 
+  const tPos = new THREE.Vector3();
+  const tQuat = new THREE.Quaternion();
+  const tScale = new THREE.Vector3();
+
   renderer.setAnimationLoop(() => {
     const now = performance.now();
     if (found) clock += reduceMotion ? TOTAL_MS : now - last; // reduced motion → jump to end
     last = now;
 
-    // MindAR poses & shows/hides anchor.group itself; only animate when tracked
-    if (!anchor.group.visible || !found) {
+    holder.visible = found && anchor.group.visible;
+    if (!holder.visible) {
       renderer.render(scene, camera);
       return;
+    }
+    // drive the holder: position exact, rotation damped, snapped on (re)acquire
+    anchor.group.matrix.decompose(tPos, tQuat, tScale);
+    holder.position.copy(tPos);
+    holder.scale.copy(tScale);
+    if (!posed) {
+      holder.quaternion.copy(tQuat);
+      posed = true;
+    } else {
+      holder.quaternion.slerp(tQuat, SMOOTH_ROT);
     }
 
     const bob = Math.sin(((now / 1000) * HOVER_HZ) * Math.PI * 2) * HOVER_AMP;
