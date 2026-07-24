@@ -852,7 +852,8 @@ export function start(container: HTMLElement, opts: StartOpts = {}): Handle | nu
     let leanX = 0;
     const lean = tilt.getLean();
     if (lean) {
-      leanY = lean.gamma;
+      // gamma inverted so left/right answers the wrist the same way up/down does
+      leanY = -lean.gamma;
       leanX = -lean.beta;
     } else if (mouseSeen) {
       leanY = mouseX * MOUSE_GAIN;
