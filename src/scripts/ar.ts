@@ -37,10 +37,8 @@ const GROW_MS = 300; // per-strike button growth tween (easeOutBack, fixed lengt
 const TILT_GRAV = 1.7; // phone tilt (or mouse) = gravity for loose bars — they slide
 const SHAKE_THRESHOLD = 14; // m/s² of device shake that triggers a scatter
 const SHAKE_DEBOUNCE_MS = 1600;
-const SPILL_ON = 0.55; // gyro lean beyond this breaks the seated bars loose…
-const SPILL_OFF = 0.38; // …and levelling back under this snaps them home
-const SPILL_GRAV = 4.2; // downhill acceleration while spilled
-const SPILL_RANGE = 1.5; // how far the spilled bars may slide
+const FAN_SHIFT = 0.06; // tilt fans the seated bars apart in depth (parallax)
+const FAN_ROT = 0.09; // and turns each face slightly into the light (rad)
 const HOVER_LIFT = 0.12; // hovered button face rises toward the viewer
 const HOVER_GLOW = 0.9; // extra rim light while hovered
 const BEVEL = 0.009; // chamfered edges — machined objects have chamfers, and the
@@ -647,7 +645,6 @@ export function start(container: HTMLElement, opts: StartOpts = {}): Handle | nu
   let impactAt = -1e9; // last forge strike (camera kick + light spike)
   let absorbed = 0; // cream bars forged into the button so far
   let lastShake = -1e9;
-  let spilling = false; // gyro tilt past SPILL_ON: the bars slide downhill
   let ctaHover = false;
   let hoverGlow = 0; // smoothed 0..1 hover state driving the lift + light
   let forgeQueue: BarSim[] = []; // strike order — each launches when the previous lands
@@ -865,23 +862,21 @@ export function start(container: HTMLElement, opts: StartOpts = {}): Handle | nu
       leanY = Math.sin(phase) * IDLE_AMP;
       leanX = Math.cos(phase) * IDLE_AMP * 0.4;
     }
-    // gyro spill: tilt the phone hard and the seated bars break loose and
-    // slide downhill; level it back and they fly home and click in — the
-    // "it snaps back" thesis you can feel in your wrist. Gyro only (a mouse
-    // lean would spill constantly), with hysteresis so it never flutters.
-    if (lean && riseDone && mode === 'mark' && !pendingMode) {
-      const leanMag = Math.hypot(leanY, leanX);
-      if (!spilling && leanMag > SPILL_ON) {
-        spilling = true;
-        buzz(14);
-        for (const bar of bars) {
-          if (!bar.grabbed) bar.live = true; // break the whole mark loose
-        }
-      } else if (spilling && leanMag < SPILL_OFF) {
-        spilling = false; // the springs take over and carry them home
+    // gyro fan: tilting fans the seated bars apart in depth and turns their
+    // faces slightly into the light — the mark reads as loosely stacked slats
+    // breathing with the hand. Subtle by design; springs own anything loose.
+    if (riseDone && mode === 'mark' && !pendingMode) {
+      for (let i = 0; i < bars.length; i++) {
+        const bar = bars[i];
+        if (bar.live || bar.grabbed) continue;
+        const f = (i - 2) / 2; // -1..1 across the mark, accent at the pivot
+        bar.mesh.position.set(
+          bar.home.x + leanY * FAN_SHIFT * f * 0.4,
+          bar.home.y,
+          bar.home.z + leanY * FAN_SHIFT * f * 2,
+        );
+        bar.mesh.rotation.set(leanX * FAN_ROT * 0.35, leanY * FAN_ROT, 0);
       }
-    } else {
-      spilling = false;
     }
 
     if (!riseDone) {
@@ -917,15 +912,6 @@ export function start(container: HTMLElement, opts: StartOpts = {}): Handle | nu
         // phone tilt (or the mouse) is gravity for anything loose — it slides
         bar.vel.x += leanY * TILT_GRAV * dtSim;
         bar.vel.y += leanX * TILT_GRAV * dtSim;
-        if (spilling) {
-          // no homing while spilled — pure downhill slide inside a soft bound
-          bar.vel.x += leanY * SPILL_GRAV * dtSim;
-          bar.vel.y += leanX * SPILL_GRAV * dtSim;
-          bar.vel.multiplyScalar(Math.max(0, 1 - 1.4 * dtSim));
-          bar.mesh.position.addScaledVector(bar.vel, dtSim);
-          if (bar.mesh.position.length() > SPILL_RANGE) bar.mesh.position.setLength(SPILL_RANGE);
-          continue;
-        }
         if (now < bar.launchAt) {
           // forge suspense: hang scattered, coasting, until this bar's strike
           bar.vel.multiplyScalar(Math.max(0, 1 - 1.6 * dtSim));
