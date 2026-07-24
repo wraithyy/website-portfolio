@@ -23,7 +23,6 @@ const ROT_K = 30; // torque pulling a tumbling bar back upright
 const ROT_DAMP = 7.5;
 const ACCENT_K_MUL = 3.4; // the opinion bar: returns much faster…
 const ACCENT_DAMP_MUL = 1.7; // …and lands decisively, without the wobble
-const ACCENT_GRAB = 0.45; // and drags heavier under the finger
 const RAGE_N = 3; // this many throws…
 const RAGE_WINDOW_MS = 5000; // …within this window = the mark shakes its head
 const COLOR_LERP = 4; // per-second rate for the finale colour morph
@@ -31,11 +30,17 @@ const BEVEL = 0.009; // chamfered edges — machined objects have chamfers, and 
 const BEVEL_T = 0.01; // rim light needs an edge to catch
 const SEAT_POS_EPS = 0.01; // "close enough" to click home
 const SEAT_VEL_EPS = 0.06;
-const GRAB_FOLLOW = 0.55; // grabbed bar → finger follow per frame (1 = rigid)
 const GRAB_RANGE = 2.4; // how far a bar can be dragged from centre (world units)
-const GRIP_INERTIA = 0.35; // off-centre grabs torque the bar (τ = r × −a) — feels held
-const GRIP_DAMP = 3.2; // swing damping while held (lower = loose dangle)
-const ANGVEL_MAX = 14; // rad/s cap so a wild fling can't spin-blur the bar
+// held-bar rigid body: a stiff spring pins the GRIP POINT to the finger; the
+// constraint force also torques the bar (τ = r × F), so off-centre grabs swing
+// and circular finger motion genuinely spins it up — short bars spin faster
+// (smaller moment of inertia), the real thing
+const GRIP_K = 140; // grip-to-finger spring stiffness (1/s²)
+const GRIP_LIN_DAMP = 9; // linear damping while held (tracks without oscillating)
+const GRIP_ANG_DAMP = 1.1; // angular damping while held — low, so spins persist
+const ACCENT_MASS = 2.4; // the opinion bar is heavier to swing and to spin
+const ANGVEL_MAX = 22; // rad/s cap so a wild fling can't spin-blur the bar
+const FINALE_AT = 10; // double-taps before the mark concedes the button
 const SCATTER_SPEED = 3.0; // double-tap explosion speed
 const TILT_GAIN = 0.4; // how far the object leans with the phone (rad at full tilt)
 const LIGHT_RAKE = 2.4; // how far the vermilion rim light travels with tilt (world x)
@@ -86,8 +91,8 @@ export type StartOpts = {
   label?: string;
   /** A thrown/scattered bar just clicked home. `attempts` = throws + scatters. */
   onSettle?: (attempts: number, allHome: boolean) => void;
-  /** Double-tap blew the mark apart. */
-  onScatter?: () => void;
+  /** Double-tap blew the mark apart; `count` = how many double-taps so far. */
+  onScatter?: (count: number) => void;
   /** First throw of the vermilion accent bar (the opinion). */
   onAccentThrow?: () => void;
   /** Rapid-fire throws — the mark just shook its head. */
@@ -119,12 +124,14 @@ type BarSim = {
   targetEnv: number;
   kMul: number; // per-bar spring stiffness multiplier (the opinion bar is stiffer)
   dampMul: number;
+  mass: number;
+  invI: number; // inverse moment of inertia — short bars spin up faster
   vel: THREE.Vector3;
   angVel: THREE.Vector3;
   live: boolean; // under spring physics (thrown / scattered / released)
   grabbed: boolean;
   /** While held: finger point + grip offset (bar frame) driving the swing. */
-  grip: { target: THREE.Vector3; offset: THREE.Vector3; prevVel: THREE.Vector3 } | null;
+  grip: { target: THREE.Vector3; offset: THREE.Vector3 } | null;
 };
 
 function disposeTree(root: THREE.Object3D) {
@@ -196,6 +203,9 @@ function buildMonogram(): { group: THREE.Group; bars: BarSim[]; accentMesh: THRE
       targetEnv: mat.envMapIntensity,
       kMul: accent ? ACCENT_K_MUL : 1,
       dampMul: accent ? ACCENT_DAMP_MUL : 1,
+      mass: accent ? ACCENT_MASS : 1,
+      // slender-rod approximation: I ∝ (length² + depth²) / 12
+      invI: 12 / ((h * s) ** 2 + BAR_DEPTH ** 2),
       vel: new THREE.Vector3(),
       angVel: new THREE.Vector3(),
       live: false,
@@ -363,7 +373,7 @@ function createGrabControls(
           .clone()
           .sub(bar.mesh.position)
           .applyQuaternion(bar.mesh.quaternion.clone().invert());
-        bar.grip = { target: p.clone(), offset, prevVel: bar.vel.clone() };
+        bar.grip = { target: p.clone(), offset };
         buzz(6);
         return;
       }
@@ -447,30 +457,27 @@ function createGrabControls(
   };
 }
 
-/** One frame of a HELD bar: the centre chases (finger − rotated grip offset),
-    and the finger's inertia torques the bar around the grip — grab an end and
-    it swings like a real slat held between two fingers. */
+/** One frame of a HELD bar — a small rigid body pinned to the finger by a
+    stiff spring at the GRIP POINT. The constraint force both drags the centre
+    and torques the bar (τ = r × F): grab an end and it hangs and swings; move
+    the finger in circles and it genuinely spins up. Release keeps the momentum. */
 function gripStep(bar: BarSim, dt: number) {
   const grip = bar.grip;
   if (!grip) return;
   const { mesh, vel, angVel } = bar;
   const worldOffset = grip.offset.clone().applyQuaternion(mesh.quaternion);
-  const target = grip.target.clone().sub(worldOffset);
-  if (target.length() > GRAB_RANGE) target.setLength(GRAB_RANGE);
-  const follow = bar.accent ? GRAB_FOLLOW * ACCENT_GRAB : GRAB_FOLLOW;
-  const alpha = 1 - (1 - follow) ** (dt * 60);
-  const before = mesh.position.clone();
-  mesh.position.lerp(target, alpha);
-  const newVel = mesh.position.clone().sub(before).divideScalar(dt);
-  const accel = newVel.clone().sub(grip.prevVel).divideScalar(dt);
-  grip.prevVel.copy(newVel);
-  vel.lerp(newVel, 0.5); // half-smoothed — this becomes the throw
-  // inertial torque about the grip: the pseudo-force −a acts on the CENTRE,
-  // giving τ = (−r) × (−a) = r × a — the far end trails behind the grip
-  const torque = worldOffset.clone().cross(accel.multiplyScalar(GRIP_INERTIA));
-  angVel.addScaledVector(torque, dt);
-  angVel.multiplyScalar(Math.max(0, 1 - GRIP_DAMP * dt));
+  const gripPos = mesh.position.clone().add(worldOffset);
+  const force = grip.target.clone().sub(gripPos).multiplyScalar(GRIP_K);
+  vel.addScaledVector(force, dt / bar.mass);
+  vel.multiplyScalar(Math.max(0, 1 - GRIP_LIN_DAMP * dt));
+  angVel.addScaledVector(
+    worldOffset.clone().cross(force),
+    (dt * bar.invI) / bar.mass,
+  );
+  angVel.multiplyScalar(Math.max(0, 1 - GRIP_ANG_DAMP * dt));
   angVel.clampLength(0, ANGVEL_MAX);
+  mesh.position.addScaledVector(vel, dt);
+  if (mesh.position.length() > GRAB_RANGE) mesh.position.setLength(GRAB_RANGE);
   const w = angVel.length();
   if (w > 1e-5) {
     const dq = new THREE.Quaternion().setFromAxisAngle(angVel.clone().divideScalar(w), w * dt);
@@ -597,9 +604,11 @@ export function start(container: HTMLElement, opts: StartOpts = {}): Handle | nu
   let attempts = 0; // throws + scatters — attempts to break it, not bars seated
   let mode: SceneMode = 'mark';
   let pendingMode: SceneMode | null = null;
-  let scatterHappened = false; // first double-tap reassembles the mark; later ones morph
+  let scatterCount = 0; // double-taps so far; the FINALE_AT-th one earns the button
   let accentThrown = false;
   let shakeAt = -1e9; // defiant head-shake timestamp (rage response)
+  let timeScale = 1; // finale slow-motion: drops to ~0.25, eases back to 1
+  let flashAt = -1e9; // finale light flash timestamp
   const throwTimes: number[] = [];
 
   // the finale formation: the five bars turn 90° and stack into one chunky
@@ -668,15 +677,23 @@ export function start(container: HTMLElement, opts: StartOpts = {}): Handle | nu
   const scatter = () => {
     if (!riseDone) return;
     attempts += 1;
-    if (scatterHappened) {
-      // every later double-tap morphs the pile: mark ⇄ working button
-      pendingMode = mode === 'mark' ? 'button' : 'mark';
-      setTargets(pendingMode);
+    scatterCount += 1;
+    if (mode === 'button') {
+      // once the button exists, double-tap toggles the two shapes
+      pendingMode = 'mark';
+      setTargets('mark');
+    } else if (scatterCount >= FINALE_AT) {
+      // the tenth attempt earns the button — slow the world down for it
+      pendingMode = 'button';
+      setTargets('button');
+      if (!reduce) {
+        timeScale = 0.25;
+        flashAt = performance.now();
+      }
     }
-    scatterHappened = true;
     blast();
     buzz([18, 30, 18, 30, 28]);
-    opts.onScatter?.();
+    opts.onScatter?.(scatterCount);
   };
 
   const controls = createGrabControls(canvas, camera, spinner, monogram, bars, {
@@ -739,14 +756,17 @@ export function start(container: HTMLElement, opts: StartOpts = {}): Handle | nu
         }
       }
     } else {
+      // finale slow-motion eases back to real time
+      timeScale = lerp(timeScale, 1, Math.min(1, dt * 0.9));
+      const dtSim = dt * timeScale;
       // bar physics: held bars swing on the grip; loose live bars chase home
       for (const bar of bars) {
         if (bar.grabbed) {
-          gripStep(bar, dt);
+          gripStep(bar, dtSim);
           continue;
         }
         if (!bar.live) continue;
-        if (stepBar(bar, dt)) {
+        if (stepBar(bar, dtSim)) {
           buzz(8); // clicked home
           const allHome = bars.every((b) => !b.live);
           if (allHome && pendingMode) {
@@ -758,7 +778,7 @@ export function start(container: HTMLElement, opts: StartOpts = {}): Handle | nu
         }
       }
       // finale colour morph: cream ⇄ vermilion while the bars are in flight
-      const cl = Math.min(1, COLOR_LERP * dt);
+      const cl = Math.min(1, COLOR_LERP * dtSim);
       for (const bar of bars) {
         if (!bar.mat.color.equals(bar.targetColor)) bar.mat.color.lerp(bar.targetColor, cl);
         bar.mat.envMapIntensity = lerp(bar.mat.envMapIntensity, bar.targetEnv, cl);
@@ -794,6 +814,10 @@ export function start(container: HTMLElement, opts: StartOpts = {}): Handle | nu
       shakeAge < 900 ? Math.sin(shakeAge / 45) * 0.055 * Math.exp(-shakeAge / 260) : 0;
     rim.position.x = leanY * LIGHT_RAKE;
     rim.position.y = 0.3 + leanX * 0.8;
+    // finale flash: the vermilion light surges while the button assembles
+    const flashAge = now - flashAt;
+    rim.intensity =
+      flashAge < 2400 ? 1.6 + 4.2 * Math.sin(Math.min(1, flashAge / 2400) * Math.PI) : 1.6;
 
     renderer.render(scene, camera);
   });

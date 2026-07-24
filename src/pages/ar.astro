@@ -244,10 +244,12 @@ import { email } from '../data/site';
   let scattered = false;
   let signed = false;
   let sceneMode = 'mark';
+  let scatters = 0;
   const handle = start(stage, {
     label: t['ar.alt'],
-    onScatter: () => {
+    onScatter: (count) => {
       scattered = true;
+      scatters = count;
       cta.hidden = true; // in flight — the label waits for the slab to seat
     },
     onAccentThrow: () => {
@@ -267,7 +269,11 @@ import { email } from '../data/site';
       if (sceneMode === 'button') return; // the finale owns the copy
       if (scattered && allHome) {
         scattered = false;
-        hint.textContent = t['ar.hint4'];
+        // count up toward the finale — telegraphs there's a payoff at ten
+        hint.textContent =
+          scatters > 1
+            ? t['ar.standing'].replace('{n}', String(Math.min(scatters, 9)))
+            : t['ar.hint4'];
         saveBtn.classList.remove('is-nudged');
         requestAnimationFrame(() => saveBtn.classList.add('is-nudged'));
         if (!signed) {
