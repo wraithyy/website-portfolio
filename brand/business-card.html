@@ -1,0 +1,139 @@
+<!doctype html>
+<!--
+  Business card, print-ready. Per brand/manual.html section 07:
+  85 x 55 mm trim + 3 mm bleed = 91 x 61 mm page, texts >= 5 mm from trim.
+  Page 1 = front (Paper), page 2 = back (Ink, symbol centered).
+  Regeneration recipe:
+  "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless=new \
+    --user-data-dir=/tmp/card-chrome --no-pdf-header-footer \
+    --print-to-pdf=brand/business-card.pdf brand/business-card.html
+  Before offset print: convert wordmark text to outlines (manual rule 06).
+-->
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<title>Josef Kvapil — vizitka 85×55</title>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; box-sizing: border-box; }
+  @page { size: 91mm 61mm; margin: 0; }
+  body { font-family: 'JetBrains Mono', monospace; }
+
+  .card {
+    width: 91mm;
+    height: 61mm;
+    page-break-after: always;
+    /* 3 mm bleed + 5 mm safe zone from trim */
+    padding: 8mm;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+  }
+
+  /* ---- front ---- */
+  .front { background: #faf8f4; color: #1a1815; }
+  .front .lockup { height: 8mm; width: auto; }
+
+  /* hairline carries the monogram's K-notch: a gap sized like the
+     10-unit notch, placed where the accent stripe sits in the lockup */
+  .notch-rule {
+    display: flex;
+    gap: 1.8mm;
+    align-items: center;
+  }
+  .notch-rule::before {
+    content: '';
+    width: 12mm;
+    border-top: 0.35mm solid #c93a20;
+  }
+  .notch-rule::after {
+    content: '';
+    flex: 1;
+    border-top: 0.2mm solid #dedad2;
+  }
+
+  .front .bottom {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    gap: 4mm;
+  }
+  .role {
+    font-size: 5.6pt;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #6b6660;
+    line-height: 1.8;
+  }
+  .contact {
+    font-size: 5.6pt;
+    line-height: 1.8;
+    text-align: right;
+    color: #1a1815;
+  }
+  .contact a { color: inherit; text-decoration: none; }
+
+  /* ---- back: terminal session on ink ---- */
+  .back {
+    background: #121110;
+    color: #e8e4dc;
+    justify-content: center;
+    gap: 2.6mm;
+    font-size: 6.4pt;
+    line-height: 1;
+  }
+  .back .line { display: flex; align-items: center; gap: 1.6mm; white-space: nowrap; }
+  .back .prompt svg { height: 2.6mm; display: block; }
+  .back .out { color: #918c84; padding-left: 4.2mm; }
+  .back .cursor {
+    display: inline-block;
+    width: 1.6mm;
+    height: 2.8mm;
+    background: #ff5a3c;
+    margin-left: 0.4mm;
+  }
+  .back .konami { letter-spacing: 0.14em; }
+</style>
+</head>
+<body>
+
+<div class="card front">
+  <svg class="lockup" viewBox="0 0 990 168" fill="#1a1815">
+    <rect x="0" y="89" width="25" height="79"/>
+    <rect x="36" y="0" width="25" height="168"/>
+    <rect x="71" y="0" width="25" height="168" fill="#c93a20"/>
+    <rect x="107" y="0" width="25" height="79"/>
+    <rect x="107" y="89" width="25" height="79"/>
+    <text x="196" y="136" font-family="'Instrument Serif', Georgia, serif" font-size="144" textLength="770" lengthAdjust="spacingAndGlyphs">Josef Kvapil</text>
+  </svg>
+
+  <div class="notch-rule"></div>
+
+  <div class="bottom">
+    <div class="role">Frontend architekt<br>Liberec</div>
+    <div class="contact">
+      josef0kvapil@gmail.com<br>
+      jkvapil.cz<br>
+      github.com/wraithyy
+    </div>
+  </div>
+</div>
+
+<div class="card back">
+  <div class="line">
+    <span class="prompt"><svg viewBox="0 0 132 168" fill="#e8e4dc"><rect x="0" y="89" width="25" height="79"/><rect x="36" y="0" width="25" height="168"/><rect x="71" y="0" width="25" height="168"/><rect x="107" y="0" width="25" height="79"/><rect x="107" y="89" width="25" height="79"/></svg></span>
+    <span>git blame -- frontend/</span>
+  </div>
+  <div class="out">josef kvapil · frontend architect · liberec</div>
+  <div class="line">
+    <span class="prompt"><svg viewBox="0 0 132 168" fill="#e8e4dc"><rect x="0" y="89" width="25" height="79"/><rect x="36" y="0" width="25" height="168"/><rect x="71" y="0" width="25" height="168"/><rect x="107" y="0" width="25" height="79"/><rect x="107" y="89" width="25" height="79"/></svg></span>
+    <span>open https://jkvapil.cz</span>
+  </div>
+  <div class="line">
+    <span class="prompt"><svg viewBox="0 0 132 168" fill="#e8e4dc"><rect x="0" y="89" width="25" height="79"/><rect x="36" y="0" width="25" height="168"/><rect x="71" y="0" width="25" height="168"/><rect x="107" y="0" width="25" height="79"/><rect x="107" y="89" width="25" height="79"/></svg></span>
+    <span class="cursor"></span>
+  </div>
+</div>
+
+</body>
+</html>

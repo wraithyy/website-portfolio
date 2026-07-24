@@ -1,57 +1,41 @@
 ---
+import '@fontsource/jetbrains-mono/latin-ext.css';
+import Logo from '../components/Logo.astro';
 import Base from '../layouts/Base.astro';
 import { email } from '../data/site';
 
-// The card's QR opens this page. Instead of fragile live image-tracking, it
-// shows the JK monogram as an interactive 3D object (model-viewer) that works
-// on every device/browser with zero camera permission, and offers NATIVE AR
-// ("view in your space") via Quick Look (iOS) / Scene Viewer (Android) — rock
-// steady, ARKit/ARCore quality. noindex; always-ink regardless of theme.
+// The card's QR opens this page. Instead of fragile live image-tracking (or a
+// native-AR handoff that can't animate on iOS), it shows the JK monogram as an
+// interactive 3D object that rises off the "paper" and catches a vermilion light
+// as you tilt the phone. Pure WebGL — zero camera, zero install, ~100% on iOS +
+// Android. Strings resolve client-side from navigator.language. noindex; always ink.
 ---
 
 <Base lang="en" noindex>
   <main id="main-content" class="ar">
     <header class="ar__head">
       <span class="label-mono ar__kicker">Josef Kvapil</span>
-      <span class="label-mono ar__role">Frontend architekt · Liberec</span>
+      <span class="label-mono ar__role" id="ar-role"></span>
     </header>
 
-    <model-viewer
-      id="ar-mv"
-      src="/ar/model.glb"
-      ios-src="/ar/model.usdz"
-      alt="3D monogram Josefa Kvapila"
-      poster="/favicon.svg"
-      camera-controls
-      auto-rotate
-      auto-rotate-delay="600"
-      rotation-per-second="18deg"
-      interaction-prompt="none"
-      animation-name="build"
-      shadow-intensity="1.2"
-      shadow-softness="1"
-      environment-image="neutral"
-      exposure="1.15"
-      camera-orbit="18deg 78deg auto"
-      min-camera-orbit="auto 60deg auto"
-      max-camera-orbit="auto 95deg auto"
-      ar
-      ar-modes="webxr scene-viewer quick-look"
-      ar-scale="fixed"
-    >
-      <button id="ar-btn" slot="ar-button" class="ar__btn ar__ar">Postav do prostoru · AR →</button>
-      <div slot="progress-bar" class="ar__progress"><div class="ar__progress-fill"></div></div>
-    </model-viewer>
-
-    <p class="ar__hint label-mono">Táhni pro otočení · AR postaví monogram do prostoru</p>
-
-    <div class="ar__actions">
-      <a href="/josef.vcf" download class="ar__btn" data-ev="contact_save">Uložit kontakt</a>
-      <a href={`mailto:${email}`} class="ar__btn ar__btn--ghost" data-ev="cta_mail">Napiš mi</a>
-      <a href="/" class="ar__btn ar__btn--ghost" data-ev="cta_web">jkvapil.cz</a>
+    <div class="ar__stage" id="ar-stage">
+      <button class="ar__tap label-mono" id="ar-tap" type="button" hidden></button>
+      {/* maker's signature — fades in the first time the scattered mark reassembles */}
+      <p class="ar__sig" id="ar-sig" aria-hidden="true">Josef Kvapil</p>
+      <div class="ar__fallback" id="ar-fallback" hidden>
+        <Logo class="ar__fallback-mark" />
+      </div>
     </div>
 
-    <div id="ar-toast" class="ar__toast label-mono" role="status" hidden>Kontakt stažen ✓</div>
+    <p class="ar__hint label-mono" id="ar-hint"></p>
+
+    <div class="ar__actions">
+      <a href="/josef.vcf" download class="ar__btn" id="ar-save" data-ev="contact_save"></a>
+      <a href={`mailto:${email}`} class="ar__btn ar__btn--ghost" id="ar-mail" data-ev="cta_mail"></a>
+      <a href="/" class="ar__btn ar__btn--ghost" id="ar-web" data-ev="cta_web"></a>
+    </div>
+
+    <div id="ar-toast" class="ar__toast label-mono" role="status" hidden></div>
   </main>
 </Base>
 
@@ -94,16 +78,81 @@ import { email } from '../data/site';
     color: var(--muted);
     font-size: 0.7rem;
   }
-  #ar-mv {
+  .ar__stage {
+    position: relative;
     flex: 1;
-    width: 100%;
     min-height: 0;
-    background: transparent;
-    --poster-color: transparent;
-    --progress-bar-color: var(--accent);
+    width: 100%;
+    touch-action: none;
   }
+  .ar__stage :global(canvas) {
+    display: block;
+  }
+  .ar__tap {
+    position: absolute;
+    left: 50%;
+    bottom: 12%;
+    transform: translateX(-50%);
+    z-index: 3;
+    background: transparent;
+    border: 1px solid color-mix(in srgb, var(--paper) 30%, transparent);
+    color: var(--paper);
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    padding: 0.6rem 1.1rem;
+    min-height: 44px;
+    cursor: pointer;
+    animation: ar-pulse 2.4s ease-in-out infinite;
+  }
+  @keyframes ar-pulse {
+    0%,
+    100% {
+      opacity: 0.55;
+    }
+    50% {
+      opacity: 1;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .ar__tap {
+      animation: none;
+    }
+  }
+  .ar__sig {
+    position: absolute;
+    left: 50%;
+    bottom: 4%;
+    transform: translateX(-50%);
+    margin: 0;
+    font-family: 'Instrument Serif', Georgia, serif;
+    font-style: italic;
+    font-size: 1.35rem;
+    color: var(--paper);
+    opacity: 0;
+    transition: opacity 1.4s ease;
+    pointer-events: none;
+  }
+  .ar__sig.is-signed {
+    opacity: 0.85;
+  }
+  .ar__fallback {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .ar__fallback-mark {
+    width: 40%;
+    max-width: 9rem;
+    height: auto;
+    color: var(--paper);
+  }
+  /* left-aligned with the lockup — one Swiss column, the action row is the
+     sole centered exception */
   .ar__hint {
-    text-align: center;
+    text-align: left;
     color: var(--muted);
     font-size: 0.68rem;
     text-transform: uppercase;
@@ -121,7 +170,7 @@ import { email } from '../data/site';
     font-size: 0.8125rem;
     letter-spacing: 0.08em;
     text-transform: uppercase;
-    color: var(--paper);
+    color: var(--ink);
     background: var(--accent);
     border: none;
     padding: 0.7rem 1.3rem;
@@ -135,33 +184,28 @@ import { email } from '../data/site';
   .ar__btn:hover {
     opacity: 0.92;
   }
+  @keyframes ar-nudge {
+    0%,
+    100% {
+      transform: translateY(0);
+    }
+    35% {
+      transform: translateY(-3px);
+    }
+  }
+  .ar__btn.is-nudged {
+    animation: ar-nudge 0.6s ease;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .ar__btn.is-nudged {
+      animation: none;
+    }
+  }
   .ar__btn--ghost {
     background: transparent;
     color: var(--paper);
-    border: 1px solid color-mix(in srgb, var(--paper) 35%, transparent);
-  }
-  /* the AR launch button floats over the viewer, bottom-centre */
-  .ar__ar {
-    position: absolute;
-    bottom: 1rem;
-    left: 50%;
-    transform: translateX(-50%);
-  }
-  .ar__progress {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    width: 40%;
-    max-width: 12rem;
-    height: 2px;
-    transform: translate(-50%, -50%);
-    background: color-mix(in srgb, var(--paper) 20%, transparent);
-  }
-  .ar__progress-fill {
-    height: 100%;
-    width: 0;
-    background: var(--accent);
-    transition: width 0.2s;
+    /* 60% so the outline clears the 3:1 WCAG UI-component contrast floor */
+    border: 1px solid color-mix(in srgb, var(--paper) 60%, transparent);
   }
   .ar__toast {
     position: absolute;
@@ -170,7 +214,7 @@ import { email } from '../data/site';
     transform: translateX(-50%);
     z-index: 4;
     background: var(--accent);
-    color: var(--paper);
+    color: var(--ink);
     padding: 0.5rem 0.9rem;
     font-size: 0.72rem;
     letter-spacing: 0.08em;
@@ -179,44 +223,96 @@ import { email } from '../data/site';
 </style>
 
 <script>
-  import '@google/model-viewer';
+  import { email } from '../data/site';
+  import { ui, type Lang } from '../i18n/ui';
+  import { start } from '../scripts/ar';
 
-  const mv = document.getElementById('ar-mv') as HTMLElement & {
-    canActivateAR?: boolean;
-    play?: (opts?: { repetitions?: number }) => void;
+  const byId = (id: string) => {
+    const el = document.getElementById(id);
+    if (!el) throw new Error(`#${id} missing`);
+    return el;
   };
-  const arBtn = document.getElementById('ar-btn')!;
-  const toast = document.getElementById('ar-toast')!;
 
-  // hide the AR button where native AR isn't available (desktop, some webviews)
-  const syncAr = () => {
-    arBtn.hidden = !mv?.canActivateAR;
-  };
-  // play the "build" animation once on load; tap the model to replay it
-  const playBuild = () => mv?.play?.({ repetitions: 1 });
-  mv?.addEventListener('load', () => {
-    syncAr();
-    playBuild();
+  const lang: Lang = navigator.language?.toLowerCase().startsWith('cs') ? 'cs' : 'en';
+  const t = ui[lang];
+  document.documentElement.lang = lang;
+
+  const stage = byId('ar-stage');
+  const tapBtn = byId('ar-tap');
+  const fallback = byId('ar-fallback');
+  const toast = byId('ar-toast');
+
+  byId('ar-role').textContent = t['ar.role'];
+  byId('ar-hint').textContent = t['ar.hint'];
+  byId('ar-save').textContent = t['ar.save'];
+  byId('ar-mail').textContent = t['ar.mail'];
+  byId('ar-web').textContent = t['ar.web'];
+  tapBtn.textContent = t['ar.tap'];
+  toast.textContent = t['ar.toast'];
+
+  // the hint line narrates the toy: throw → "it snaps back" → invite the
+  // double-tap → after the full scatter reassembles, the punchline + signature
+  const hint = byId('ar-hint');
+  const sig = byId('ar-sig');
+  const saveBtn = byId('ar-save');
+  let scattered = false;
+  let signed = false;
+  const handle = start(stage, {
+    label: t['ar.alt'],
+    onScatter: () => {
+      scattered = true;
+    },
+    onSettle: (attempts, allHome) => {
+      if (scattered && allHome) {
+        scattered = false;
+        hint.textContent = t['ar.hint4'];
+        saveBtn.classList.remove('is-nudged');
+        requestAnimationFrame(() => saveBtn.classList.add('is-nudged'));
+        if (!signed) {
+          signed = true;
+          sig.classList.add('is-signed'); // the maker signs the reassembled mark
+          console.log(
+            `%c${attempts} attempt${attempts === 1 ? '' : 's'} to break it. Still standing.\nI build software the same way. → ${email}`,
+            'font-family:ui-monospace,monospace;color:#ff5a3c',
+          );
+        }
+      } else if (attempts >= 5) {
+        hint.textContent = t['ar.hintN'].replace('{n}', String(attempts));
+      } else if (attempts >= 2) {
+        hint.textContent = t['ar.hint3'];
+      } else {
+        hint.textContent = t['ar.hint2'];
+      }
+    },
   });
-  mv?.addEventListener('ar-status', syncAr);
-  mv?.addEventListener('click', playBuild);
-  setTimeout(syncAr, 1200);
+  if (!handle) {
+    // no WebGL — show the static mark, keep the working contact buttons
+    fallback.hidden = false;
+    fallback.setAttribute('role', 'img');
+    fallback.setAttribute('aria-label', t['ar.alt']);
+  } else {
+    if (handle.needsTiltGesture) {
+      // iOS: tilt lighting needs a user gesture; the tap prompt is that gesture
+      tapBtn.hidden = false;
+      tapBtn.addEventListener('click', async () => {
+        tapBtn.hidden = true;
+        await handle.enableTilt();
+      });
+    }
+    addEventListener('pagehide', () => handle.stop(), { once: true });
+    // bfcache back-navigation would restore a stopped canvas — start fresh
+    addEventListener('pageshow', (e) => {
+      if (e.persisted) location.reload();
+    });
+  }
 
-  // drive the loading progress bar
-  const fill = mv?.querySelector('.ar__progress-fill') as HTMLElement | null;
-  const bar = mv?.querySelector('.ar__progress') as HTMLElement | null;
-  mv?.addEventListener('progress', (e) => {
-    const p = (e as CustomEvent<{ totalProgress: number }>).detail.totalProgress;
-    if (fill) fill.style.width = `${p * 100}%`;
-    if (bar) bar.hidden = p >= 1;
-  });
-
+  // analytics + save-contact toast (unchanged event hooks)
   const track = (name: string) =>
     dispatchEvent(new CustomEvent('ar:event', { detail: { name } }));
   let toastTimer = 0;
   for (const el of document.querySelectorAll<HTMLElement>('[data-ev]')) {
     el.addEventListener('click', () => {
-      track(el.dataset.ev!);
+      track(el.dataset.ev ?? '');
       if (el.dataset.ev === 'contact_save') {
         toast.hidden = false;
         clearTimeout(toastTimer);

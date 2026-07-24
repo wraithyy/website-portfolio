@@ -1,0 +1,150 @@
+<!doctype html>
+<!--
+  Business card v2 — "the card comes alive". Front: editorial lockup + contact
+  (per brand/manual.html §07). Back: ink field with a branded QR that opens the
+  interactive page (https://jkvapil.cz/ar); scanning the QR raises the JK monogram
+  as a 3D object you spin and tilt into the light — no camera, no app. The /ar page
+  also offers "save contact". Small nerd craft: monogram knocked into the QR centre
+  at EC level H.
+
+  85 x 55 mm trim + 3 mm bleed = 91 x 61 mm page, texts >= 5 mm from trim.
+
+  The QR (brand/qr-card-dark.svg) encodes https://jkvapil.cz/ar at EC level H.
+  Regenerate the QR only if the URL changes (needs Node + the `qrcode` pkg):
+    see scratchpad gen-qr.js — modules cream #E8E4DC, monogram centre knockout, verified via jsQR.
+
+  Card PDF regeneration:
+  "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless=new \
+    --user-data-dir=/tmp/card-chrome --no-pdf-header-footer \
+    --print-to-pdf=brand/business-card-v2.pdf brand/business-card-v2.html
+  (Chrome writes the PDF then hangs; kill it after ~10 s.)
+  Before offset print: convert wordmark text to outlines (manual rule 06).
+-->
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<title>Josef Kvapil — vizitka v2 (QR vCard)</title>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; box-sizing: border-box; }
+  @page { size: 91mm 61mm; margin: 0; }
+  body { font-family: 'JetBrains Mono', monospace; }
+
+  .card {
+    width: 91mm;
+    height: 61mm;
+    page-break-after: always;
+    padding: 8mm;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+  }
+
+  /* ---- front: editorial ---- */
+  .front { background: #faf8f4; color: #1a1815; }
+  .front .top { display: flex; flex-direction: column; gap: 3mm; }
+  .front .lockup { height: 8mm; width: auto; align-self: flex-start; }
+
+  .rule {
+    display: flex;
+    align-items: center;
+    gap: 1.8mm;
+  }
+  .rule::before { content: ''; width: 12mm; border-top: 0.35mm solid #c93a20; }
+  .rule::after  { content: ''; flex: 1; border-top: 0.2mm solid #dedad2; }
+
+  .front .bottom {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    gap: 4mm;
+  }
+  .role {
+    font-size: 5.6pt;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #6b6660;
+    line-height: 1.8;
+  }
+  .contact {
+    font-size: 5.6pt;
+    line-height: 1.8;
+    text-align: right;
+    color: #1a1815;
+  }
+
+  /* ---- back: ink + QR + registration marks ---- */
+  /* Asymmetric editorial back: lockup + meta top-left, QR bottom-right, AR cue
+     bottom-left. The asymmetry across quadrants is a deliberate editorial choice. */
+  .back { background: #121110; color: #e8e4dc; }
+  .back .lockup { height: 7mm; width: auto; align-self: flex-start; }
+  .back .rule { display: flex; align-items: center; gap: 1.6mm; margin-top: 2.6mm; }
+  .back .rule::before { content: ''; width: 10mm; border-top: 0.35mm solid #ff5a3c; }
+  .back .rule::after { content: ''; flex: 1; border-top: 0.2mm solid #4a4640; }
+  .back .meta {
+    margin-top: 2.6mm;
+    font-size: 5.4pt;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: #918c84;
+    line-height: 1.9;
+  }
+  .back .foot { display: flex; justify-content: space-between; align-items: flex-end; gap: 3mm; }
+  .back .ar-cta {
+    font-size: 5.4pt;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #918c84;
+    line-height: 1.7;
+  }
+  .back .ar-cta .arrow { color: #ff5a3c; font-size: 8pt; }
+  .back .qr { height: 24mm; width: 24mm; display: block; }
+</style>
+</head>
+<body>
+
+<div class="card front">
+  <div class="top">
+    <svg class="lockup" viewBox="0 0 990 168" fill="#1a1815">
+      <rect x="0" y="89" width="25" height="79"/>
+      <rect x="36" y="0" width="25" height="168"/>
+      <rect x="71" y="0" width="25" height="168" fill="#c93a20"/>
+      <rect x="107" y="0" width="25" height="79"/>
+      <rect x="107" y="89" width="25" height="79"/>
+      <text x="196" y="136" font-family="'Instrument Serif', Georgia, serif" font-size="144" textLength="770" lengthAdjust="spacingAndGlyphs">Josef Kvapil</text>
+    </svg>
+  </div>
+
+  <div class="rule"></div>
+
+  <div class="bottom">
+    <div class="role">Frontend architekt<br>Liberec</div>
+    <div class="contact">
+      josef0kvapil@gmail.com<br>
+      jkvapil.cz<br>
+      github.com/wraithyy
+    </div>
+  </div>
+</div>
+
+<div class="card back">
+  <div>
+    <svg class="lockup" viewBox="0 0 990 168" fill="#e8e4dc">
+      <rect x="0" y="89" width="25" height="79"/>
+      <rect x="36" y="0" width="25" height="168"/>
+      <rect x="71" y="0" width="25" height="168" fill="#ff5a3c"/>
+      <rect x="107" y="0" width="25" height="79"/>
+      <rect x="107" y="89" width="25" height="79"/>
+      <text x="196" y="136" font-family="'Instrument Serif', Georgia, serif" font-size="144" textLength="770" lengthAdjust="spacingAndGlyphs">Josef Kvapil</text>
+    </svg>
+    <div class="rule"></div>
+    <div class="meta">Frontend architekt<br>Liberec &middot; jkvapil.cz</div>
+  </div>
+  <div class="foot">
+    <div class="ar-cta"><span class="arrow">&rarr;</span><br>Naskenuj,<br>ožiju v AR</div>
+    <img class="qr" src="qr-card-dark.svg" alt="QR — jkvapil.cz/ar">
+  </div>
+</div>
+
+</body>
+</html>

@@ -1,47 +1,54 @@
-/* WebAR business-card experience.
-   Scan the printed card's QR → this page → point the camera at the card back
-   (asymmetric editorial target compiled into public/ar/card.mind). The JK
-   monogram and an angular "napiš mi" button rise out of the card, built the way
-   Josef builds software; the button is tappable (mailto), tapping the monogram
-   replays it.
+/* "It snaps back" — the JK monogram as a physical toy you cannot break.
 
-   Stability model (learned across many iterations):
-   - Content is parented to a scene-level `holder`, NOT to anchor.group. Each
-     frame we READ MindAR's pose and drive the holder — position direct, rotation
-     damped (EMA/slerp). Writing back into anchor.group fought MindAR; reading out
-     does not. Rotation is the noisiest DOF, so damping it kills most jitter.
-   - Content sits LOW on the card (small elevation). Elevation multiplies angular
-     pose noise into lateral wobble, so we keep it flat and sell "rising" with an
-     occluder reveal + a contact shadow instead of height.
-   - Layout uses the card's wide (landscape) axis and stays inside the tracked
-     area; nothing overflows the weak top/bottom edges.
-   Loaded lazily from ar.astro. */
+   The card's QR opens /ar. The printed mark rises off the paper into five solid
+   machined bars. Grab any bar and throw it — it springs back into its slot with
+   a wobble and a haptic click. Double-tap scatters all five; the mark reassembles
+   itself. Drag empty space to spin the whole mark (with inertia); tilt the phone
+   (or move the mouse) to rake a vermilion light across it. Pure three.js — no
+   camera, no WebXR, no physics engine: art-directed springs. Loaded lazily from
+   ar.astro. */
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
-// mind-ar treats `three` as a peer dep → single shared THREE instance
-import { MindARThree } from 'mind-ar/dist/mindar-image-three.prod.js';
-import { email } from '../data/site';
+import { clamp01, easeOutBack, easeOutCubic, isTap, lerp } from './ar-math';
 
 const CREAM = '#e8e4dc';
 const VERMILION = '#ff5a3c';
-const INK = '#121110';
 
-// --- tuning knobs (safe to tweak on-device) ---------------------------------
-const FILTER_MIN_CF = 0.0001; // MindAR One-Euro: lower = steadier when still
-const FILTER_BETA = 1;
-const MISS_TOLERANCE = 10; // ride through brief blur without blinking out
-const WARMUP_TOLERANCE = 3;
-const SMOOTH_ROT = 0.4; // rotation damping (lower = steadier, more lag); position stays exact
-const RISE_MS = 1000; // monogram grow-in
-const BAR_STAGGER_MS = 130;
-const STEP_MS = 1100; // per story beat
-const TYPE_MS = 40; // typewriter speed per char
-const HOVER_AMP = 0.004; // float bob (kept tiny — it reads as instability if large)
-const HOVER_HZ = 0.28;
-const SWEEP_MS = 750; // the single vermilion hairline payoff
+// --- calibration knobs (tune on-device; the "wow" lives here, not in the code) ---
+const DRAG_SENS = 0.006; // pointer px → radians of whole-mark spin
+const FRICTION = 0.94; // post-release spin decay per frame (higher = longer coast)
+const SPRING_K = 30; // bar return-spring stiffness (1/s²)
+const SPRING_DAMP = 7.0; // < critical (2·√K) → one confident overshoot, then seated
+const ROT_K = 30; // torque pulling a tumbling bar back upright
+const ROT_DAMP = 7.5;
+const BEVEL = 0.009; // chamfered edges — machined objects have chamfers, and the
+const BEVEL_T = 0.01; // rim light needs an edge to catch
+const SEAT_POS_EPS = 0.01; // "close enough" to click home
+const SEAT_VEL_EPS = 0.06;
+const GRAB_FOLLOW = 0.55; // grabbed bar → finger follow per frame (1 = rigid)
+const GRAB_RANGE = 2.4; // how far a bar can be dragged from centre (world units)
+const THROW_TUMBLE = 0.9; // how much a throw sets the bar tumbling
+const SCATTER_SPEED = 3.0; // double-tap explosion speed
+const TILT_GAIN = 0.4; // how far the object leans with the phone (rad at full tilt)
+const LIGHT_RAKE = 2.4; // how far the vermilion rim light travels with tilt (world x)
+const TILT_EMA = 0.12; // tilt low-pass (lower = smoother, reads as heft not jitter)
+const BAR_ROUGHNESS = 0.55; // cream bars: matte-machined
+const ACCENT_ROUGHNESS = 0.34; // accent spine: sharper specular so the light "catches"
+const BAR_DEPTH = 0.2; // extrusion depth — deep enough to read as a machined solid
+const RISE_MS = 1400; // per-bar rise/thicken duration
+const RISE_STAGGER = 140; // ms between successive bars seating
+const RISE_DELAY = 550; // ms of "flat / printed" before the rise fires
+const DOLLY_FROM = 4.3; // camera z at load…
+const DOLLY_TO = 3.3; // …dollying in as the mark rises
+const IDLE_AMP = 0.32; // slow auto-lean amplitude when idle & no gyro (rad ratio)
+const IDLE_HZ = 0.07; // auto-lean frequency
+const MOUSE_GAIN = 0.9; // desktop: pointer position drives the lean (no gyro there)
+const TAP_MOVE_PX = 8; // pointer travel under which an up counts as a tap, not a drag
+const TAP_MS = 350; // and under this duration
+const DOUBLE_TAP_MS = 320; // two taps within this = scatter
 
-// --- JK monogram bars, from the logo SVG (viewBox 0 0 132 168) ---
-const BARS: [number, number, number, number, boolean][] = [
+// JK monogram bars, from the logo SVG (viewBox 0 0 132 168); 3rd bar is the accent.
+const BARS: readonly [number, number, number, number, boolean][] = [
   [0, 89, 25, 79, false],
   [36, 0, 25, 168, false],
   [71, 0, 25, 168, true],
@@ -50,534 +57,635 @@ const BARS: [number, number, number, number, boolean][] = [
 ];
 const VB_W = 132;
 const VB_H = 168;
-// landscape layout: monogram dominant on the left, button on the right
-const MONO_WIDTH = 0.3;
-const MONO_DEPTH = 0.05;
-const MONO_X = -0.26;
-const MONO_Y = 0.0;
+const MONO_WIDTH = 1.12; // world units — the mark is the hero, it fills the frame
 
-const STEPS = [
-  { label: '01 — Architektura', note: 'nejdřív nakreslím hranici' },
-  { label: '02 — TypeScript', note: 'otypuju, jak komunikuje' },
-  { label: '03 — Design systémy', note: 'každý stav rozhodnutý jednou' },
-  { label: '04 — Přístupnost', note: 'funguje pro každou ruku' },
-  { label: '05 — Review & AI', note: 'renders ✓ klávesnice ✓ kontrast ✓' },
-  { label: '06 — Dodávka', note: 'nasazeno. zmáčkni tlačítko.' },
-];
-const CTA_LABEL = 'NAPIŠ MI →';
-
-const BTN_W = 0.26;
-const BTN_H = 0.1;
-const BTN_DEPTH = 0.04;
-const BTN_X = 0.24;
-const BTN_Y = -0.02;
-const BTN_LIFT = 0.03;
-const SOCKET_M = 0.045;
-
-const BLOCK_COUNT = 6;
-
-type Handle = { stop: () => void; replay: () => void; skip: () => void };
-type Ctx2D = CanvasRenderingContext2D;
-
-function fitFont(ctx: Ctx2D, text: string, family: string, maxW: number, startPx: number) {
-  let px = startPx;
-  ctx.font = `${px}px ${family}`;
-  while (ctx.measureText(text).width > maxW && px > 10) {
-    px -= 3;
-    ctx.font = `${px}px ${family}`;
+const buzz = (pattern: number | number[]) => {
+  try {
+    navigator.vibrate?.(pattern);
+  } catch {
+    /* haptics unsupported (iOS) — silently ignored */
   }
-  return px;
+};
+
+type OrientationPermissionApi = {
+  requestPermission?: () => Promise<PermissionState | 'granted' | 'denied'>;
+};
+
+export type StartOpts = {
+  reduceMotion?: boolean;
+  label?: string;
+  /** A thrown/scattered bar just clicked home. `attempts` = throws + scatters. */
+  onSettle?: (attempts: number, allHome: boolean) => void;
+  /** Double-tap blew the mark apart. */
+  onScatter?: () => void;
+};
+
+export type Handle = {
+  /** Enable device-tilt lighting. On iOS this must run inside a user gesture
+      (it triggers the permission prompt); elsewhere it just attaches the listener. */
+  enableTilt: () => Promise<boolean>;
+  /** Whether tilt needs a user gesture first (iOS 13+). */
+  needsTiltGesture: boolean;
+  /** Tear down: stop the loop, dispose GPU resources, remove listeners. */
+  stop: () => void;
+};
+
+type BarSim = {
+  mesh: THREE.Mesh;
+  mat: THREE.MeshStandardMaterial;
+  home: THREE.Vector3;
+  vel: THREE.Vector3;
+  angVel: THREE.Vector3;
+  live: boolean; // under spring physics (thrown / scattered / released)
+  grabbed: boolean;
+};
+
+function disposeTree(root: THREE.Object3D) {
+  root.traverse((node) => {
+    if (!(node instanceof THREE.Mesh)) return;
+    node.geometry.dispose();
+    const mat = node.material;
+    if (Array.isArray(mat)) mat.forEach((m) => m.dispose());
+    else mat.dispose();
+  });
 }
 
-function rectOutline(w: number, h: number, color: string) {
-  return new THREE.LineSegments(
-    new THREE.EdgesGeometry(new THREE.PlaneGeometry(w, h)),
-    new THREE.LineBasicMaterial({ color }),
-  );
+/** A bar as a chamfered slab (ExtrudeGeometry): outer footprint w×h×BAR_DEPTH,
+    centered on the origin, with a small 45° bevel that gives the rim light an
+    edge to catch — raw boxes read as plastic. */
+function barGeometry(w: number, h: number): THREE.ExtrudeGeometry {
+  const iw = w / 2 - BEVEL;
+  const ih = h / 2 - BEVEL;
+  const shape = new THREE.Shape();
+  shape.moveTo(-iw, -ih);
+  shape.lineTo(iw, -ih);
+  shape.lineTo(iw, ih);
+  shape.lineTo(-iw, ih);
+  shape.closePath();
+  const depth = BAR_DEPTH - 2 * BEVEL_T;
+  const geo = new THREE.ExtrudeGeometry(shape, {
+    depth,
+    bevelEnabled: true,
+    bevelSize: BEVEL,
+    bevelThickness: BEVEL_T,
+    bevelSegments: 2,
+  });
+  geo.translate(0, 0, -depth / 2);
+  return geo;
 }
 
-/** Invisible depth-only plane on the card surface so content below it is culled
-    → risen geometry appears to emerge from the card. */
-function makeOccluder() {
-  const mesh = new THREE.Mesh(
-    new THREE.PlaneGeometry(1.6, 1.1),
-    new THREE.MeshBasicMaterial({ colorWrite: false }),
-  );
-  mesh.position.z = -0.001;
-  mesh.renderOrder = -1;
-  return mesh;
+function buildMonogram(): { group: THREE.Group; bars: BarSim[]; accentMesh: THREE.Mesh } {
+  const group = new THREE.Group();
+  const s = MONO_WIDTH / VB_W;
+  const bars: BarSim[] = [];
+  let accentMesh: THREE.Mesh | null = null;
+  for (const [x, y, w, h, accent] of BARS) {
+    const mat = new THREE.MeshStandardMaterial({
+      color: accent ? VERMILION : CREAM,
+      roughness: accent ? ACCENT_ROUGHNESS : BAR_ROUGHNESS,
+      metalness: accent ? 0.15 : 0.05,
+      // temper the room-env ceiling reflection so the accent stays vermilion at
+      // rest — the moving hot streak comes from the raking rim light instead
+      envMapIntensity: accent ? 0.55 : 1,
+    });
+    const mesh = new THREE.Mesh(barGeometry(w * s, h * s), mat);
+    mesh.position.x = (x + w / 2 - VB_W / 2) * s;
+    mesh.position.y = -(y + h / 2 - VB_H / 2) * s;
+    group.add(mesh);
+    bars.push({
+      mesh,
+      mat,
+      home: mesh.position.clone(),
+      vel: new THREE.Vector3(),
+      angVel: new THREE.Vector3(),
+      live: false,
+      grabbed: false,
+    });
+    if (accent) accentMesh = mesh;
+  }
+  if (!accentMesh) throw new Error('monogram: accent bar missing');
+  return { group, bars, accentMesh };
 }
 
-/** A thin ink slab under the whole reveal: gives cream geometry guaranteed
-    contrast over any camera background and makes it read as placed, not floating. */
-function makeGround(w: number, h: number) {
-  const mesh = new THREE.Mesh(
-    new THREE.PlaneGeometry(w, h),
-    new THREE.MeshBasicMaterial({ color: INK, transparent: true, opacity: 0 }),
-  );
-  mesh.renderOrder = 0;
-  return mesh;
-}
-
-function makeContactShadow(worldW: number, worldH: number) {
+/** Soft radial contact shadow on a floor plane below the mark — grounds the
+    floating object so it reads as placed, not pasted. */
+function makeContactShadow(): { mesh: THREE.Mesh; mat: THREE.MeshBasicMaterial } {
   const px = 256;
   const canvas = document.createElement('canvas');
   canvas.width = px;
   canvas.height = px;
   const ctx = canvas.getContext('2d');
   if (!ctx) throw new Error('2d canvas context unavailable');
-  // offset toward the light-opposite corner (key light is +x,+y) and soften
-  const g = ctx.createRadialGradient(px * 0.42, px * 0.58, 0, px * 0.5, px * 0.5, px * 0.5);
-  g.addColorStop(0, 'rgba(0,0,0,0.5)');
-  g.addColorStop(0.6, 'rgba(0,0,0,0.18)');
+  const g = ctx.createRadialGradient(px / 2, px / 2, 0, px / 2, px / 2, px / 2);
+  g.addColorStop(0, 'rgba(0,0,0,0.55)');
+  g.addColorStop(0.55, 'rgba(0,0,0,0.18)');
   g.addColorStop(1, 'rgba(0,0,0,0)');
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, px, px);
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
-  const mesh = new THREE.Mesh(
-    new THREE.PlaneGeometry(worldW, worldH),
-    new THREE.MeshBasicMaterial({ map: texture, transparent: true, depthWrite: false, opacity: 0 }),
-  );
-  mesh.renderOrder = 1;
-  return mesh;
-}
-
-function buildMonogram() {
-  const group = new THREE.Group();
-  const s = MONO_WIDTH / VB_W;
-  const bars: THREE.Mesh[] = [];
-  const barMats: THREE.MeshStandardMaterial[] = [];
-  for (const [x, y, w, h, isAccent] of BARS) {
-    const mat = new THREE.MeshStandardMaterial({
-      color: isAccent ? VERMILION : CREAM,
-      roughness: 0.6,
-      metalness: 0,
-    });
-    const mesh = new THREE.Mesh(new THREE.BoxGeometry(w * s, h * s, MONO_DEPTH), mat);
-    mesh.position.x = (x + w / 2 - VB_W / 2) * s;
-    mesh.position.y = -(y + h / 2 - VB_H / 2) * s;
-    group.add(mesh);
-    bars.push(mesh);
-    barMats.push(mat);
-  }
-  group.position.set(MONO_X, MONO_Y, 0);
-  return { group, bars, barMats, accent: barMats[2] };
-}
-
-function makeCanvasPlane(worldW: number, pxW: number, pxH: number) {
-  const canvas = document.createElement('canvas');
-  canvas.width = pxW;
-  canvas.height = pxH;
-  const ctx = canvas.getContext('2d');
-  if (!ctx) throw new Error('2d canvas context unavailable');
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.colorSpace = THREE.SRGBColorSpace;
-  texture.anisotropy = 8;
-  const mesh = new THREE.Mesh(
-    new THREE.PlaneGeometry(worldW, (worldW * pxH) / pxW),
-    new THREE.MeshBasicMaterial({ map: texture, transparent: true }),
-  );
-  const paint = (draw: (c: Ctx2D) => void) => {
-    ctx.clearRect(0, 0, pxW, pxH);
-    draw(ctx);
-    texture.needsUpdate = true;
-  };
-  return { mesh, paint };
-}
-
-function roundRectPath(ctx: Ctx2D, x: number, y: number, w: number, h: number, r: number) {
-  ctx.beginPath();
-  ctx.moveTo(x + r, y);
-  ctx.arcTo(x + w, y, x + w, y + h, r);
-  ctx.arcTo(x + w, y + h, x, y + h, r);
-  ctx.arcTo(x, y + h, x, y, r);
-  ctx.arcTo(x, y, x + w, y, r);
-  ctx.closePath();
-}
-
-function build3DButton() {
-  const group = new THREE.Group();
-
-  const socket = new THREE.Group();
-  const floor = new THREE.Mesh(
-    new THREE.PlaneGeometry(BTN_W + SOCKET_M, BTN_H + SOCKET_M),
-    new THREE.MeshBasicMaterial({ color: '#050504' }),
-  );
-  const rim = rectOutline(BTN_W + SOCKET_M, BTN_H + SOCKET_M, CREAM);
-  rim.position.z = 0.002;
-  socket.add(floor, rim);
-
-  const geo = new THREE.BoxGeometry(BTN_W, BTN_H, BTN_DEPTH); // sharp 90° edges (brand)
-  const solidMat = new THREE.MeshStandardMaterial({ color: VERMILION, roughness: 0.5, metalness: 0 });
-  const solid = new THREE.Mesh(geo, solidMat);
-
-  const edges = new THREE.LineSegments(
-    new THREE.EdgesGeometry(geo),
-    new THREE.LineBasicMaterial({ color: CREAM }),
-  );
-
-  const label = makeCanvasPlane(BTN_W * 0.92, 512, Math.round((512 * BTN_H) / BTN_W));
-  label.paint((c) => {
-    c.fillStyle = INK;
-    fitFont(c, CTA_LABEL, "'JetBrains Mono', monospace", c.canvas.width * 0.82, 120);
-    c.textAlign = 'center';
-    c.textBaseline = 'middle';
-    c.fillText(CTA_LABEL, c.canvas.width / 2, c.canvas.height / 2 + 4);
+  const mat = new THREE.MeshBasicMaterial({
+    map: texture,
+    transparent: true,
+    depthWrite: false,
+    opacity: 0,
   });
-  label.mesh.position.z = BTN_DEPTH / 2 + 0.003;
-  solid.add(label.mesh);
-
-  const hit = new THREE.Mesh(
-    new THREE.PlaneGeometry(BTN_W * 1.5, BTN_H * 2),
-    new THREE.MeshBasicMaterial({ visible: false }),
-  );
-  hit.position.z = BTN_DEPTH / 2 + 0.01;
-  solid.add(hit);
-
-  group.add(socket, solid, edges);
-  group.position.set(BTN_X, BTN_Y, 0);
-  return { group, solid, solidMat, edges, hit };
-}
-
-function makeAssembly() {
-  const group = new THREE.Group();
-  const blocks: { mesh: THREE.Mesh; mat: THREE.MeshStandardMaterial; from: THREE.Vector3 }[] = [];
-  for (let i = 0; i < BLOCK_COUNT; i++) {
-    const mat = new THREE.MeshStandardMaterial({ color: CREAM, roughness: 0.6, metalness: 0, transparent: true });
-    const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.035, 0.035), mat);
-    const a = (i / BLOCK_COUNT) * Math.PI * 2;
-    const from = new THREE.Vector3(Math.cos(a) * 0.16, Math.sin(a) * 0.1, 0.12 + (i % 3) * 0.04);
-    group.add(mesh);
-    blocks.push({ mesh, mat, from });
-  }
-  group.position.z = BTN_LIFT;
-  group.visible = false;
-  return { group, blocks };
-}
-
-/** The single editorial payoff: a crisp vermilion hairline sweeps across the
-    card once (a 3D echo of the card's rule / the site's reveal wipe). */
-function makeSweep() {
-  const mat = new THREE.MeshBasicMaterial({ color: VERMILION, transparent: true, opacity: 0 });
-  const mesh = new THREE.Mesh(new THREE.PlaneGeometry(0.006, 0.5), mat);
-  mesh.position.z = 0.02;
-  mesh.renderOrder = 3;
-  mesh.visible = false;
+  const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1.7, 1.7), mat);
+  mesh.rotation.x = -Math.PI / 2;
+  mesh.position.y = -0.95;
   return { mesh, mat };
 }
 
-const easeOutCubic = (t: number) => 1 - (1 - t) ** 3;
-const easeOutBack = (t: number) => {
-  const c1 = 1.70158;
-  const c3 = c1 + 1;
-  return 1 + c3 * (t - 1) ** 3 + c1 * (t - 1) ** 2;
-};
-const clamp01 = (t: number) => Math.max(0, Math.min(1, t));
-const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
-
-const buzz = (pattern: number | number[]) => {
-  try {
-    navigator.vibrate?.(pattern);
-  } catch {
-    /* haptics unsupported */
-  }
+type Tilt = {
+  needsGesture: boolean;
+  enableTilt: () => Promise<boolean>;
+  /** Smoothed lean in [-1,1] per axis, or null while tilt is not active. */
+  getLean: () => { gamma: number; beta: number } | null;
+  dispose: () => void;
 };
 
-export async function start(
-  container: HTMLElement,
-  opts: { onComplete?: () => void; onFound?: () => void; onLost?: () => void } = {},
-): Promise<Handle> {
-  const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
-  try {
-    await document.fonts.ready;
-  } catch {
-    /* fonts API optional */
-  }
-
-  const mindarThree = new MindARThree({
-    container,
-    imageTargetSrc: '/ar/card.mind',
-    uiScanning: 'no',
-    uiLoading: 'no',
-    uiError: 'no',
-    filterMinCF: FILTER_MIN_CF,
-    filterBeta: FILTER_BETA,
-    missTolerance: MISS_TOLERANCE,
-    warmupTolerance: WARMUP_TOLERANCE,
-  });
-  const { renderer, scene, camera } = mindarThree;
-  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
-
-  // soft environment reflections → matte materials read premium, not plastic
-  const pmrem = new THREE.PMREMGenerator(renderer);
-  scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
-  scene.add(new THREE.HemisphereLight(0xffffff, 0x404040, 0.9));
-  const key = new THREE.DirectionalLight(0xffffff, 1.3);
-  key.position.set(0.4, 0.8, 1);
-  scene.add(key);
-  const fill = new THREE.DirectionalLight(0xffffff, 0.4);
-  fill.position.set(-0.6, -0.3, 0.8);
-  scene.add(fill);
-
-  const anchor = mindarThree.addAnchor(0);
-  // Content lives in a scene-level holder we drive from MindAR's pose: position
-  // copied exactly, rotation damped (slerp) to absorb the jumpy raw pose. Occluder
-  // lives INSIDE the holder too, so the emergence occlusion stays consistent with
-  // the content (the earlier regression left it in anchor.group → desync + fling).
-  // We SNAP on (re)acquire so it never slerps in from a wrong identity rotation.
-  const holder = new THREE.Group();
-  holder.visible = false;
-  scene.add(holder);
-  holder.add(makeOccluder());
-
-  const ground = makeGround(0.78, 0.42);
-  ground.position.z = 0.001;
-  holder.add(ground);
-
-  const shadow = makeContactShadow(0.85, 0.5);
-  shadow.position.z = 0.0015;
-  holder.add(shadow);
-
-  const { group: monogram, bars, barMats, accent } = buildMonogram();
-  holder.add(monogram);
-
-  const btn = build3DButton();
-  btn.group.visible = false;
-  holder.add(btn.group);
-
-  const assembly = makeAssembly();
-  btn.group.add(assembly.group);
-
-  const sweep = makeSweep();
-  holder.add(sweep.mesh);
-
-  const caption = makeCanvasPlane(0.5, 720, 190);
-  caption.mesh.position.set(BTN_X, BTN_Y - 0.16, 0.01);
-  caption.mesh.renderOrder = 2;
-  caption.mesh.visible = false;
-  holder.add(caption.mesh);
-
-  let found = false;
-  let posed = false; // snapped to the pose since the last (re)acquire?
-  let clock = 0;
-  let last = 0;
-  let painted = -1;
-  let stepShownAt = 0;
-  let lastReveal = -1;
-  let complete = false;
-  let buzzedComplete = false;
-  let sweepAt = -1;
-  let tappable = false;
-  let pressing = 0;
-  const landAt = bars.map(() => -1);
-  const TOTAL_MS = RISE_MS + STEPS.length * STEP_MS;
-
-  anchor.onTargetFound = () => {
-    found = true;
-    posed = false; // snap to the fresh pose on the next frame
-    last = performance.now();
-    opts.onFound?.();
+function createTilt(): Tilt {
+  let enabled = false;
+  let gamma = 0;
+  let beta = 0;
+  const onOrient = (e: DeviceOrientationEvent) => {
+    if (e.gamma == null || e.beta == null) return;
+    const g = THREE.MathUtils.clamp(e.gamma / 45, -1, 1); // left/right
+    const b = THREE.MathUtils.clamp((e.beta - 45) / 45, -1, 1); // front/back around upright
+    gamma = lerp(gamma, g, TILT_EMA);
+    beta = lerp(beta, b, TILT_EMA);
   };
-  anchor.onTargetLost = () => {
-    found = false;
-    opts.onLost?.();
+  const api: OrientationPermissionApi =
+    typeof DeviceOrientationEvent !== 'undefined'
+      ? // iOS-only static method, absent from the DOM lib typings — cast is unavoidable
+        (DeviceOrientationEvent as unknown as OrientationPermissionApi)
+      : {};
+  const needsGesture = typeof api.requestPermission === 'function';
+
+  const enableTilt = async (): Promise<boolean> => {
+    if (enabled) return true;
+    if (typeof DeviceOrientationEvent === 'undefined') return false;
+    if (needsGesture && api.requestPermission) {
+      try {
+        if ((await api.requestPermission()) !== 'granted') return false;
+      } catch {
+        return false;
+      }
+    }
+    window.addEventListener('deviceorientation', onOrient);
+    enabled = true;
+    return true;
   };
 
+  return {
+    needsGesture,
+    enableTilt,
+    getLean: () => (enabled ? { gamma, beta } : null),
+    dispose: () => window.removeEventListener('deviceorientation', onOrient),
+  };
+}
+
+type GrabControls = {
+  hasInteracted: () => boolean;
+  /** Advance whole-mark spin inertia; call once per frame with the frame dt. */
+  applySpinInertia: (dt: number) => void;
+  dispose: () => void;
+};
+
+/** Pointer input: grab a bar (drag it, throw it), spin the mark from empty
+    space (with inertia), double-tap to scatter. */
+function createGrabControls(
+  el: HTMLElement,
+  camera: THREE.Camera,
+  spinner: THREE.Object3D,
+  monogram: THREE.Object3D,
+  bars: BarSim[],
+  opts: { canGrab: () => boolean; onThrow: () => void; onDoubleTap: () => void },
+): GrabControls {
+  let interacted = false;
+  let spinDragging = false;
+  let activePointer: number | null = null; // first finger wins; others ignored
+  let grabbedBar: BarSim | null = null;
+  const grabOffset = new THREE.Vector3();
+  const lastLocal = new THREE.Vector3();
+  let lastMoveAt = 0;
+  let lastX = 0;
+  let lastY = 0;
+  let downX = 0;
+  let downY = 0;
+  let downAt = 0;
+  let lastTapAt = -1e9;
+  let vX = 0;
+  let vY = 0;
+  const qx = new THREE.Quaternion();
+  const qy = new THREE.Quaternion();
+  const axisX = new THREE.Vector3(1, 0, 0);
+  const axisY = new THREE.Vector3(0, 1, 0);
   const raycaster = new THREE.Raycaster();
-  const monoHitTargets = monogram.children;
-  const onTap = (e: PointerEvent) => {
-    if (!found || !holder.visible) return;
-    const rect = renderer.domElement.getBoundingClientRect();
-    const p = new THREE.Vector2(
+  const ndc = new THREE.Vector2();
+  const dragPlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
+  const hitPoint = new THREE.Vector3();
+
+  const spin = (dx: number, dy: number) => {
+    qy.setFromAxisAngle(axisY, dx);
+    qx.setFromAxisAngle(axisX, dy);
+    spinner.quaternion.premultiply(qy).premultiply(qx);
+  };
+  const capture = (fn: () => void) => {
+    try {
+      fn();
+    } catch {
+      /* pointer capture is best-effort; some engines throw on edge cases */
+    }
+  };
+  const setRay = (e: PointerEvent) => {
+    const rect = el.getBoundingClientRect();
+    ndc.set(
       ((e.clientX - rect.left) / rect.width) * 2 - 1,
       -((e.clientY - rect.top) / rect.height) * 2 + 1,
     );
-    raycaster.setFromCamera(p, camera);
-    if (tappable && raycaster.intersectObjects([btn.solid, btn.hit], true).length > 0) {
-      pressing = performance.now();
-      buzz(18);
-      setTimeout(() => {
-        window.location.href = `mailto:${email}`;
-      }, 200);
-    } else if (complete && raycaster.intersectObjects(monoHitTargets, false).length > 0) {
-      handle.replay(); // tapping the monogram replays the build
-      buzz(10);
+    raycaster.setFromCamera(ndc, camera);
+  };
+  /** Pointer ray → point on the z=0 world plane, in monogram-local space. */
+  const localPoint = (e: PointerEvent): THREE.Vector3 | null => {
+    setRay(e);
+    if (!raycaster.ray.intersectPlane(dragPlane, hitPoint)) return null;
+    return monogram.worldToLocal(hitPoint.clone());
+  };
+
+  const onDown = (e: PointerEvent) => {
+    if (activePointer !== null) return; // a second finger must not steal the grab
+    activePointer = e.pointerId;
+    interacted = true;
+    lastX = downX = e.clientX;
+    lastY = downY = e.clientY;
+    downAt = performance.now();
+    vX = vY = 0;
+    capture(() => el.setPointerCapture(e.pointerId));
+
+    if (opts.canGrab()) {
+      setRay(e);
+      const hits = raycaster.intersectObjects(
+        bars.map((b) => b.mesh),
+        false,
+      );
+      const mesh = hits[0]?.object;
+      const bar = mesh ? bars.find((b) => b.mesh === mesh) : undefined;
+      if (bar) {
+        grabbedBar = bar;
+        bar.grabbed = true;
+        bar.live = true;
+        bar.vel.set(0, 0, 0);
+        bar.angVel.set(0, 0, 0);
+        const p = localPoint(e);
+        if (p) {
+          grabOffset.copy(p).sub(bar.mesh.position);
+          lastLocal.copy(p);
+        }
+        lastMoveAt = performance.now();
+        buzz(6);
+        return;
+      }
     }
-  };
-  window.addEventListener('pointerdown', onTap, true);
-
-  const paintCaption = (step: (typeof STEPS)[number], chars: number) =>
-    caption.paint((c) => {
-      const w = c.canvas.width;
-      const h = c.canvas.height;
-      // ink plate for guaranteed legibility over the camera feed
-      c.fillStyle = 'rgba(18,17,16,0.82)';
-      roundRectPath(c, 10, 10, w - 20, h - 20, 10);
-      c.fill();
-      c.textAlign = 'center';
-      c.fillStyle = VERMILION;
-      c.font = "36px 'JetBrains Mono', monospace";
-      c.textBaseline = 'top';
-      c.fillText(step.label.toUpperCase(), w / 2, 34);
-      c.fillStyle = CREAM;
-      fitFont(c, step.note, "'Instrument Serif', Georgia, serif", w * 0.9, 58);
-      c.fillText(step.note.slice(0, chars), w / 2, 96);
-    });
-
-
-  const resetStory = () => {
-    clock = 0;
-    last = performance.now();
-    landAt.fill(-1);
-    painted = -1;
-    lastReveal = -1;
-    stepShownAt = 0;
-    complete = false;
-    buzzedComplete = false;
-    sweepAt = -1;
-    tappable = false;
-    pressing = 0;
-    sweep.mesh.visible = false;
+    spinDragging = true;
   };
 
-  const handle: Handle = {
-    replay: resetStory,
-    skip: () => {
-      clock = Math.max(clock, TOTAL_MS); // jump to the finished state
-    },
-    stop: () => {
-      renderer.setAnimationLoop(null);
-      window.removeEventListener('pointerdown', onTap, true);
-      mindarThree.stop();
-      pmrem.dispose();
-      const video = container.querySelector('video');
-      const stream = video && video.srcObject instanceof MediaStream ? video.srcObject : null;
-      stream?.getTracks().forEach((t) => t.stop());
-    },
-  };
-
-  const tPos = new THREE.Vector3();
-  const tQuat = new THREE.Quaternion();
-  const tScale = new THREE.Vector3();
-
-  renderer.setAnimationLoop(() => {
-    const now = performance.now();
-    if (found) clock += reduceMotion ? TOTAL_MS : now - last; // reduced motion → jump to end
-    last = now;
-
-    holder.visible = found && anchor.group.visible;
-    if (!holder.visible) {
-      renderer.render(scene, camera);
+  const onMove = (e: PointerEvent) => {
+    if (e.pointerId !== activePointer) return;
+    if (grabbedBar) {
+      const p = localPoint(e);
+      if (!p) return;
+      const now = performance.now();
+      const dt = Math.max(1 / 240, (now - lastMoveAt) / 1000);
+      const target = p.clone().sub(grabOffset);
+      if (target.length() > GRAB_RANGE) target.setLength(GRAB_RANGE);
+      const before = grabbedBar.mesh.position.clone();
+      // event-rate-independent follow (120Hz pointers compose to the same feel)
+      const alpha = 1 - (1 - GRAB_FOLLOW) ** (dt * 60);
+      grabbedBar.mesh.position.lerp(target, alpha);
+      // finger velocity, half-smoothed — this becomes the throw
+      grabbedBar.vel.lerp(grabbedBar.mesh.position.clone().sub(before).divideScalar(dt), 0.5);
+      lastLocal.copy(p);
+      lastMoveAt = now;
       return;
     }
-    // drive the holder: position exact, rotation damped, snapped on (re)acquire
-    anchor.group.matrix.decompose(tPos, tQuat, tScale);
-    holder.position.copy(tPos);
-    holder.scale.copy(tScale);
-    if (!posed) {
-      holder.quaternion.copy(tQuat);
-      posed = true;
+    if (!spinDragging) return;
+    const dx = (e.clientX - lastX) * DRAG_SENS;
+    const dy = (e.clientY - lastY) * DRAG_SENS;
+    spin(dx, dy);
+    vX = dx;
+    vY = dy;
+    lastX = e.clientX;
+    lastY = e.clientY;
+  };
+
+  const onUp = (e: PointerEvent) => {
+    if (e.pointerId !== activePointer) return;
+    activePointer = null;
+    capture(() => el.releasePointerCapture(e.pointerId));
+    const moved = Math.hypot(e.clientX - downX, e.clientY - downY);
+    const tap = isTap(moved, performance.now() - downAt, TAP_MOVE_PX, TAP_MS);
+
+    if (grabbedBar) {
+      const bar = grabbedBar;
+      grabbedBar = null;
+      bar.grabbed = false;
+      if (tap) {
+        // a poke, not a throw — nudge it so it wobbles in place
+        bar.vel.set(0, 0, 1.2);
+        bar.angVel.set(0.6, 0.6, 0);
+      } else {
+        // tumble around the axis perpendicular to the motion — deterministic,
+        // the return of a well-built thing is never random
+        bar.angVel.set(bar.vel.y, -bar.vel.x, 0).multiplyScalar(THROW_TUMBLE);
+        opts.onThrow();
+      }
+    }
+    spinDragging = false;
+
+    if (tap) {
+      const now = performance.now();
+      if (now - lastTapAt < DOUBLE_TAP_MS) {
+        lastTapAt = -1e9;
+        opts.onDoubleTap();
+      } else {
+        lastTapAt = now;
+      }
+      vX = vY = 0;
+    }
+  };
+
+  el.addEventListener('pointerdown', onDown);
+  el.addEventListener('pointermove', onMove);
+  el.addEventListener('pointerup', onUp);
+  el.addEventListener('pointercancel', onUp);
+
+  return {
+    hasInteracted: () => interacted,
+    applySpinInertia: (dt: number) => {
+      if (spinDragging || grabbedBar) return;
+      if (Math.abs(vX) < 1e-4 && Math.abs(vY) < 1e-4) return;
+      spin(vX, vY);
+      const decay = FRICTION ** (dt * 60); // frame-rate independent coast
+      vX *= decay;
+      vY *= decay;
+    },
+    dispose: () => {
+      el.removeEventListener('pointerdown', onDown);
+      el.removeEventListener('pointermove', onMove);
+      el.removeEventListener('pointerup', onUp);
+      el.removeEventListener('pointercancel', onUp);
+    },
+  };
+}
+
+/** Damped-spring step for one live bar; returns true the frame it seats home. */
+function stepBar(bar: BarSim, dt: number): boolean {
+  const { mesh, home, vel, angVel } = bar;
+  // position spring toward home
+  const acc = home.clone().sub(mesh.position).multiplyScalar(SPRING_K);
+  acc.addScaledVector(vel, -SPRING_DAMP);
+  vel.addScaledVector(acc, dt);
+  mesh.position.addScaledVector(vel, dt);
+  // torque spring back upright
+  const q = mesh.quaternion;
+  const angle = 2 * Math.acos(THREE.MathUtils.clamp(q.w, -1, 1));
+  if (angle > 1e-4) {
+    const s = Math.sqrt(Math.max(1e-12, 1 - q.w * q.w));
+    const axis = new THREE.Vector3(q.x / s, q.y / s, q.z / s);
+    const wrapped = angle > Math.PI ? angle - 2 * Math.PI : angle;
+    angVel.addScaledVector(axis, -wrapped * ROT_K * dt);
+  }
+  angVel.multiplyScalar(Math.max(0, 1 - ROT_DAMP * dt));
+  const w = angVel.length();
+  if (w > 1e-5) {
+    const dq = new THREE.Quaternion().setFromAxisAngle(
+      angVel.clone().divideScalar(w),
+      w * dt,
+    );
+    mesh.quaternion.premultiply(dq).normalize();
+  }
+  // seated?
+  if (
+    mesh.position.distanceTo(home) < SEAT_POS_EPS &&
+    vel.length() < SEAT_VEL_EPS &&
+    angle < 0.04 &&
+    w < 0.12
+  ) {
+    mesh.position.copy(home);
+    mesh.quaternion.identity();
+    vel.set(0, 0, 0);
+    angVel.set(0, 0, 0);
+    bar.live = false;
+    return true;
+  }
+  return false;
+}
+
+/** Returns null when WebGL is unavailable so the caller can show a static fallback. */
+export function start(container: HTMLElement, opts: StartOpts = {}): Handle | null {
+  const reduce = opts.reduceMotion ?? matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  let renderer: THREE.WebGLRenderer;
+  try {
+    renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    if (!renderer.getContext()) return null;
+  } catch {
+    return null;
+  }
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  renderer.setClearColor(0x000000, 0);
+  renderer.toneMapping = THREE.ACESFilmicToneMapping; // rolls off the hot accent face
+  renderer.toneMappingExposure = 0.95;
+  const canvas = renderer.domElement;
+  canvas.style.width = '100%';
+  canvas.style.height = '100%';
+  canvas.style.display = 'block';
+  canvas.style.touchAction = 'none'; // we own the gesture
+  canvas.setAttribute('role', 'img');
+  if (opts.label) canvas.setAttribute('aria-label', opts.label);
+  container.appendChild(canvas);
+
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(35, 1, 0.1, 100);
+  camera.position.set(0, 0.05, DOLLY_FROM);
+  camera.lookAt(0, 0, 0);
+
+  // premium matte reflections from the bundled room env — no external HDRI asset
+  const pmrem = new THREE.PMREMGenerator(renderer);
+  const room = new RoomEnvironment();
+  const envRT = pmrem.fromScene(room, 0.04);
+  scene.environment = envRT.texture;
+  disposeTree(room); // throwaway meshes, rendered once into the PMREM target
+
+  // darker ambient: the mark is carved out of the ink by the moving lights
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x171512, 0.5));
+  const key = new THREE.DirectionalLight(0xffffff, 0.95);
+  key.position.set(0.6, 1.0, 1.0);
+  scene.add(key);
+  // vermilion rim light — its position is driven by device tilt to rake the accent bar
+  const rim = new THREE.DirectionalLight(0xff5a3c, 1.6);
+  rim.position.set(0, 0.3, 1.4);
+  scene.add(rim);
+
+  // pivot (tilt/idle lean) → spinner (user drag + inertia) → monogram
+  const pivot = new THREE.Group();
+  const spinner = new THREE.Group();
+  pivot.add(spinner);
+  scene.add(pivot);
+
+  const { group: monogram, bars } = buildMonogram();
+  spinner.add(monogram);
+
+  const shadow = makeContactShadow();
+  scene.add(shadow.mesh);
+
+  const riseStart = reduce ? -1e9 : performance.now() + RISE_DELAY; // -inf ⇒ seated
+  let riseDone = reduce;
+  const riseSpan = RISE_MS + BARS.length * RISE_STAGGER;
+  let attempts = 0; // throws + scatters — attempts to break it, not bars seated
+
+  // desktop has no gyro — the pointer position stands in for the tilt
+  let mouseX = 0;
+  let mouseY = 0;
+  let mouseSeen = false;
+  const onMouse = (e: PointerEvent) => {
+    if (e.pointerType !== 'mouse') return;
+    mouseSeen = true;
+    mouseX = (e.clientX / innerWidth) * 2 - 1;
+    mouseY = (e.clientY / innerHeight) * 2 - 1;
+  };
+  window.addEventListener('pointermove', onMouse);
+
+  const scatter = () => {
+    if (!riseDone) return;
+    for (const bar of bars) {
+      if (bar.grabbed) continue;
+      const dir = bar.home
+        .clone()
+        .setZ(0)
+        .normalize()
+        .multiplyScalar(SCATTER_SPEED * (0.75 + Math.random() * 0.5));
+      dir.z = 0.8 + Math.random() * 1.2; // pop toward the viewer
+      bar.vel.copy(dir);
+      bar.angVel.set(
+        (Math.random() - 0.5) * 6,
+        (Math.random() - 0.5) * 6,
+        (Math.random() - 0.5) * 6,
+      );
+      bar.live = true;
+    }
+    attempts += 1;
+    buzz([18, 30, 18, 30, 28]);
+    opts.onScatter?.();
+  };
+
+  const controls = createGrabControls(canvas, camera, spinner, monogram, bars, {
+    canGrab: () => riseDone,
+    onThrow: () => {
+      attempts += 1;
+      buzz(10);
+    },
+    onDoubleTap: scatter,
+  });
+  const tilt = createTilt();
+  if (!tilt.needsGesture) void tilt.enableTilt(); // non-iOS fires without a prompt
+
+  const resize = () => {
+    const w = container.clientWidth || 1;
+    const h = container.clientHeight || 1;
+    renderer.setSize(w, h, false);
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+  };
+  resize();
+  const ro = new ResizeObserver(resize);
+  ro.observe(container);
+
+  let lastFrame = performance.now();
+  renderer.setAnimationLoop(() => {
+    const now = performance.now();
+    const dt = Math.min(1 / 30, (now - lastFrame) / 1000); // clamp tab-switch jumps
+    lastFrame = now;
+
+    if (!riseDone) {
+      // rise: each bar thickens + lifts toward the viewer, overshooting as it seats
+      let allUp = true;
+      for (let i = 0; i < bars.length; i++) {
+        const t = clamp01((now - riseStart - i * RISE_STAGGER) / RISE_MS);
+        const e = easeOutBack(t);
+        bars[i].mesh.scale.z = Math.max(0.02, lerp(0.02, 1, e));
+        bars[i].mesh.position.z = lerp(-0.3, 0, e);
+        if (t < 1) allUp = false;
+      }
+      if (allUp) {
+        riseDone = true;
+        for (const b of bars) {
+          b.mesh.scale.z = 1;
+          b.mesh.position.copy(b.home);
+        }
+      }
     } else {
-      holder.quaternion.slerp(tQuat, SMOOTH_ROT);
-    }
-
-    const bob = Math.sin(((now / 1000) * HOVER_HZ) * Math.PI * 2) * HOVER_AMP;
-    const rise = clamp01(clock / RISE_MS);
-    if (shadow.material instanceof THREE.MeshBasicMaterial) shadow.material.opacity = rise * 0.55;
-    if (ground.material instanceof THREE.MeshBasicMaterial) ground.material.opacity = rise * 0.9;
-
-    // monogram: bars rise up through the surface, flash as they seat
-    for (let i = 0; i < bars.length; i++) {
-      const r = clamp01((clock - i * BAR_STAGGER_MS) / RISE_MS);
-      const e = easeOutCubic(r);
-      bars[i].position.z = lerp(-MONO_DEPTH / 2, MONO_DEPTH / 2, e) + bob * r;
-      if (r >= 1 && landAt[i] < 0) {
-        landAt[i] = clock;
-        buzz(8);
-      }
-      barMats[i].emissiveIntensity = 0;
-    }
-
-    // story / button
-    const stageF = (clock - RISE_MS) / STEP_MS;
-    const step = Math.floor(stageF);
-    const shown = Math.min(STEPS.length - 1, Math.max(0, step));
-    complete = step >= STEPS.length - 1;
-    const active = clock >= RISE_MS;
-
-    btn.group.visible = active;
-    caption.mesh.visible = active;
-
-    if (active) {
-      if (shown !== painted) {
-        painted = shown;
-        stepShownAt = clock;
-        lastReveal = -1;
-        buzz(12);
-      }
-      const note = STEPS[shown].note;
-      const reveal = Math.min(note.length, Math.floor((clock - stepShownAt) / TYPE_MS));
-      if (reveal !== lastReveal) {
-        lastReveal = reveal;
-        paintCaption(STEPS[shown], reveal);
-      }
-
-      const emerge = step >= 2 ? clamp01(stageF - 2) : 0;
-      btn.solid.visible = step >= 2;
-      btn.edges.visible = step < 2;
-      tappable = step >= 2 && emerge > 0.8;
-
-      const press = pressing ? Math.max(0, 1 - (now - pressing) / 200) : 0;
-      btn.solid.position.z = lerp(-BTN_DEPTH / 2, BTN_LIFT, easeOutCubic(emerge)) + bob - press * (BTN_LIFT + BTN_DEPTH / 2);
-
-      const conv = clamp01(stageF - 1);
-      const solidFull = step >= 2 && emerge > 0.85;
-      assembly.group.visible = (step === 1 || step === 2) && !solidFull;
-      for (const { mesh, mat, from } of assembly.blocks) {
-        const spread = 1 - conv;
-        mesh.position.set(from.x * spread, from.y * spread, from.z * spread);
-        mesh.scale.setScalar(Math.max(0.001, step >= 2 ? 1 - emerge : 0.25 + 0.75 * conv));
-        mat.opacity = step >= 2 ? 1 - emerge : 1;
-      }
-
-      if (complete && !buzzedComplete) {
-        buzzedComplete = true;
-        sweepAt = clock;
-        buzz([16, 45, 24]);
-        opts.onComplete?.();
+      // bar spring physics: anything live chases its home slot
+      for (const bar of bars) {
+        if (!bar.live || bar.grabbed) continue;
+        if (stepBar(bar, dt)) {
+          buzz(8); // clicked home
+          const allHome = bars.every((b) => !b.live);
+          opts.onSettle?.(attempts, allHome);
+        }
       }
     }
+    const risen = clamp01((now - riseStart) / riseSpan);
+    shadow.mat.opacity = risen * 0.65;
+    camera.position.z = lerp(DOLLY_FROM, DOLLY_TO, easeOutCubic(risen)); // slow push-in
 
-    // single hairline sweep payoff
-    if (sweepAt >= 0) {
-      const t = clamp01((clock - sweepAt) / SWEEP_MS);
-      sweep.mesh.visible = t < 1;
-      sweep.mesh.position.x = lerp(-0.42, 0.42, easeOutCubic(t));
-      sweep.mat.opacity = Math.sin(t * Math.PI); // fade in/out across the pass
+    controls.applySpinInertia(dt);
+
+    // lean ratio in [-1,1] per axis, by priority: gyro (phone) > mouse (desktop)
+    // > slow idle auto-lean; driven directly (never divide by a knob)
+    let leanY = 0;
+    let leanX = 0;
+    const lean = tilt.getLean();
+    if (lean) {
+      leanY = lean.gamma;
+      leanX = -lean.beta;
+    } else if (mouseSeen) {
+      leanY = mouseX * MOUSE_GAIN;
+      leanX = -mouseY * MOUSE_GAIN * 0.5;
+    } else if (!reduce && !controls.hasInteracted()) {
+      const phase = (now / 1000) * IDLE_HZ * Math.PI * 2;
+      leanY = Math.sin(phase) * IDLE_AMP;
+      leanX = Math.cos(phase) * IDLE_AMP * 0.4;
     }
+    pivot.rotation.y = leanY * TILT_GAIN;
+    pivot.rotation.x = leanX * TILT_GAIN;
+    rim.position.x = leanY * LIGHT_RAKE;
+    rim.position.y = 0.3 + leanX * 0.8;
 
     renderer.render(scene, camera);
   });
 
-  await mindarThree.start(); // prompts for camera
-
-  // sharpen tracking: continuous autofocus + a decent resolution (iOS ignores unknown keys)
-  const video = container.querySelector('video');
-  const track =
-    video?.srcObject instanceof MediaStream ? video.srcObject.getVideoTracks()[0] : null;
-  await track
-    ?.applyConstraints({ advanced: [{ focusMode: 'continuous' }, { width: 1280, height: 720 }] })
-    .catch(() => {});
-
-  // recompute MindAR's cover-size once the video actually has dimensions and on
-  // orientation/resize — fixes the intermittent letterbox.
-  const kick = () => window.dispatchEvent(new Event('resize'));
-  requestAnimationFrame(kick);
-  for (const t of [250, 800, 1500]) setTimeout(kick, t);
-  video?.addEventListener('loadedmetadata', kick);
-  video?.addEventListener('playing', kick);
-  addEventListener('orientationchange', kick);
-
-  return handle;
+  return {
+    enableTilt: tilt.enableTilt,
+    needsTiltGesture: tilt.needsGesture,
+    stop: () => {
+      renderer.setAnimationLoop(null);
+      controls.dispose();
+      tilt.dispose();
+      window.removeEventListener('pointermove', onMouse);
+      ro.disconnect();
+      for (const b of bars) {
+        b.mesh.geometry.dispose();
+        b.mat.dispose();
+      }
+      shadow.mesh.geometry.dispose();
+      shadow.mat.map?.dispose();
+      shadow.mat.dispose();
+      envRT.dispose();
+      pmrem.dispose();
+      renderer.dispose();
+      canvas.remove();
+    },
+  };
 }
