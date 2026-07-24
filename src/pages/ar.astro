@@ -105,6 +105,25 @@ import { email } from '../data/site';
     padding: 1rem 2.5rem;
     white-space: nowrap;
   }
+  /* the label stamps onto the freshly forged button */
+  @keyframes ar-stamp {
+    from {
+      transform: translate(-50%, -50%) scale(1.7);
+      opacity: 0;
+    }
+    to {
+      transform: translate(-50%, -50%) scale(1);
+      opacity: 1;
+    }
+  }
+  .ar__cta.is-stamped {
+    animation: ar-stamp 0.45s cubic-bezier(0.2, 1.4, 0.4, 1);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .ar__cta.is-stamped {
+      animation: none;
+    }
+  }
   .ar__sig {
     position: absolute;
     left: 50%;
@@ -263,6 +282,8 @@ import { email } from '../data/site';
       if (mode === 'button') {
         hint.textContent = t['ar.finale'];
         cta.hidden = false; // the bars just became a working button
+        cta.classList.remove('is-stamped');
+        requestAnimationFrame(() => cta.classList.add('is-stamped'));
       }
     },
     onSettle: (attempts, allHome) => {

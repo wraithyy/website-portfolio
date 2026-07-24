@@ -26,6 +26,16 @@ const ACCENT_DAMP_MUL = 1.7; // …and lands decisively, without the wobble
 const RAGE_N = 3; // this many throws…
 const RAGE_WINDOW_MS = 5000; // …within this window = the mark shakes its head
 const COLOR_LERP = 4; // per-second rate for the finale colour morph
+// the forge: after the finale blast, the cream bars strike the button one by
+// one from behind — each impact kicks the camera, spikes the light and grows
+// the button a step. The capabilities literally forge the button.
+const FORGE_DELAY = 750; // ms of scattered suspense before the first strike
+const FORGE_STAGGER = 320; // ms between strikes
+const FORGE_KICK = 0.09; // camera punch-in per impact (world units)
+const FORGE_SPIKE = 2.4; // rim-light surge per impact
+const TILT_GRAV = 1.7; // phone tilt (or mouse) = gravity for loose bars — they slide
+const SHAKE_THRESHOLD = 14; // m/s² of device shake that triggers a scatter
+const SHAKE_DEBOUNCE_MS = 1600;
 const BEVEL = 0.009; // chamfered edges — machined objects have chamfers, and the
 const BEVEL_T = 0.01; // rim light needs an edge to catch
 const SEAT_POS_EPS = 0.01; // "close enough" to click home
@@ -132,6 +142,7 @@ type BarSim = {
   vel: THREE.Vector3;
   angVel: THREE.Vector3;
   live: boolean; // under spring physics (thrown / scattered / released)
+  launchAt: number; // forge choreography: the spring engages only after this
   grabbed: boolean;
   /** While held: finger point + grip offset (bar frame) driving the swing. */
   grip: { target: THREE.Vector3; offset: THREE.Vector3 } | null;
@@ -213,6 +224,7 @@ function buildMonogram(): { group: THREE.Group; bars: BarSim[]; accentMesh: THRE
       vel: new THREE.Vector3(),
       angVel: new THREE.Vector3(),
       live: false,
+      launchAt: -1e9,
       grabbed: false,
       grip: null,
     });
@@ -620,7 +632,10 @@ export function start(container: HTMLElement, opts: StartOpts = {}): Handle | nu
   let accentThrown = false;
   let shakeAt = -1e9; // defiant head-shake timestamp (rage response)
   let timeScale = 1; // finale slow-motion: drops to ~0.25, eases back to 1
-  let flashAt = -1e9; // finale light flash timestamp
+  let flashAt = -1e9; // coronation light flash timestamp
+  let impactAt = -1e9; // last forge strike (camera kick + light spike)
+  let absorbed = 0; // cream bars forged into the button so far
+  let lastShake = -1e9;
   const throwTimes: number[] = [];
 
   // the finale formation: THE OPINION BECOMES THE BUTTON. The vermilion bar
@@ -640,6 +655,9 @@ export function start(container: HTMLElement, opts: StartOpts = {}): Handle | nu
   // brand vermilion on screen (targeting #ff5a3c directly renders salmon)
   const vermilion = new THREE.Color('#d13a1e');
 
+  const BTN_SCALE_FROM = new THREE.Vector3(1.15, 1, 1.1); // pre-forge button size…
+  const BTN_SCALE_TO = BUTTON_SLOTS[2].scale.clone(); // …grows a step per strike
+
   const setTargets = (m: SceneMode) => {
     for (let i = 0; i < bars.length; i++) {
       const bar = bars[i];
@@ -651,8 +669,11 @@ export function start(container: HTMLElement, opts: StartOpts = {}): Handle | nu
         if (bar.accent) {
           bar.targetColor.copy(vermilion);
           bar.targetEnv = 0.3;
+          // starts small — each forge strike grows it toward BTN_SCALE_TO
+          bar.targetScale.copy(BTN_SCALE_FROM);
+        } else {
+          bar.targetScale.copy(BUTTON_SLOTS[i].scale);
         }
-        bar.targetScale.copy(BUTTON_SLOTS[i].scale);
       } else {
         bar.home.copy(bar.markHome);
         bar.homeQuat.identity();
@@ -698,23 +719,49 @@ export function start(container: HTMLElement, opts: StartOpts = {}): Handle | nu
     if (!riseDone) return;
     attempts += 1;
     scatterCount += 1;
+    const now = performance.now();
+    for (const bar of bars) bar.launchAt = now; // default: springs engage at once
     if (mode === 'button') {
       // once the button exists, double-tap toggles the two shapes
       pendingMode = 'mark';
       setTargets('mark');
     } else if (scatterCount >= FINALE_AT) {
-      // the tenth attempt earns the button — slow the world down for it
+      // the tenth attempt earns the button — slow the world, then FORGE it:
+      // the accent forms the face first, the cream bars strike it one by one
       pendingMode = 'button';
+      absorbed = 0;
       setTargets('button');
       if (!reduce) {
         timeScale = 0.25;
-        flashAt = performance.now();
+        let rank = 0;
+        for (const bar of bars) {
+          if (!bar.accent) bar.launchAt = now + FORGE_DELAY + rank++ * FORGE_STAGGER;
+        }
       }
     }
     blast();
     buzz([18, 30, 18, 30, 28]);
     opts.onScatter?.(scatterCount);
   };
+
+  // shake the phone = scatter. devicemotion is permission-free where we attach
+  // it (Android/desktop); iOS gates it behind a prompt, so it simply stays off.
+  const onMotion = (e: DeviceMotionEvent) => {
+    const a = e.acceleration;
+    if (!a || a.x == null || a.y == null || a.z == null) return;
+    if (Math.hypot(a.x, a.y, a.z) < SHAKE_THRESHOLD) return;
+    const now = performance.now();
+    if (now - lastShake < SHAKE_DEBOUNCE_MS) return;
+    lastShake = now;
+    scatter();
+  };
+  const motionGated =
+    typeof DeviceMotionEvent !== 'undefined' &&
+    typeof (DeviceMotionEvent as unknown as OrientationPermissionApi).requestPermission ===
+      'function';
+  if (typeof DeviceMotionEvent !== 'undefined' && !motionGated) {
+    window.addEventListener('devicemotion', onMotion);
+  }
 
   const controls = createGrabControls(canvas, camera, spinner, monogram, bars, {
     canGrab: () => riseDone,
@@ -760,6 +807,23 @@ export function start(container: HTMLElement, opts: StartOpts = {}): Handle | nu
     const dt = Math.min(1 / 30, (now - lastFrame) / 1000); // clamp tab-switch jumps
     lastFrame = now;
 
+    // lean ratio in [-1,1] per axis, by priority: gyro (phone) > mouse (desktop)
+    // > slow idle auto-lean; drives the pivot, the rim light AND loose-bar gravity
+    let leanY = 0;
+    let leanX = 0;
+    const lean = tilt.getLean();
+    if (lean) {
+      leanY = lean.gamma;
+      leanX = -lean.beta;
+    } else if (mouseSeen) {
+      leanY = mouseX * MOUSE_GAIN;
+      leanX = -mouseY * MOUSE_GAIN * 0.5;
+    } else if (!reduce && !controls.hasInteracted()) {
+      const phase = (now / 1000) * IDLE_HZ * Math.PI * 2;
+      leanY = Math.sin(phase) * IDLE_AMP;
+      leanX = Math.cos(phase) * IDLE_AMP * 0.4;
+    }
+
     if (!riseDone) {
       // rise: each bar thickens + lifts toward the viewer, overshooting as it seats
       let allUp = true;
@@ -782,18 +846,37 @@ export function start(container: HTMLElement, opts: StartOpts = {}): Handle | nu
       timeScale = lerp(timeScale, 1, Math.min(1, dt * 0.9));
       const dtSim = dt * timeScale;
       // bar physics: held bars swing on the grip; loose live bars chase home
+      const buttonForge = pendingMode === 'button';
       for (const bar of bars) {
         if (bar.grabbed) {
           gripStep(bar, dtSim);
           continue;
         }
         if (!bar.live) continue;
+        // phone tilt (or the mouse) is gravity for anything loose — it slides
+        bar.vel.x += leanY * TILT_GRAV * dtSim;
+        bar.vel.y += leanX * TILT_GRAV * dtSim;
+        if (now < bar.launchAt) {
+          // forge suspense: hang scattered, coasting, until this bar's strike
+          bar.vel.multiplyScalar(Math.max(0, 1 - 1.6 * dtSim));
+          bar.mesh.position.addScaledVector(bar.vel, dtSim);
+          continue;
+        }
         if (stepBar(bar, dtSim)) {
           buzz(8); // clicked home
+          if (buttonForge && !bar.accent) {
+            // a forge strike: the button takes the hit and grows
+            absorbed += 1;
+            impactAt = now;
+            buzz(26);
+            const accent = bars[2];
+            accent.targetScale.lerpVectors(BTN_SCALE_FROM, BTN_SCALE_TO, absorbed / 4);
+          }
           const allHome = bars.every((b) => !b.live);
           if (allHome && pendingMode) {
             mode = pendingMode;
             pendingMode = null;
+            if (mode === 'button' && !reduce) flashAt = now; // coronation surge
             opts.onMode?.(mode);
           }
           opts.onSettle?.(attempts, allHome);
@@ -809,7 +892,9 @@ export function start(container: HTMLElement, opts: StartOpts = {}): Handle | nu
     }
     const risen = clamp01((now - riseStart) / riseSpan);
     shadow.mat.opacity = risen * 0.38;
-    camera.position.z = lerp(DOLLY_FROM, DOLLY_TO, easeOutCubic(risen)); // slow push-in
+    // slow push-in + a punch toward the button on every forge strike
+    const kick = FORGE_KICK * Math.exp(-(now - impactAt) / 140);
+    camera.position.z = lerp(DOLLY_FROM, DOLLY_TO, easeOutCubic(risen)) - kick;
 
     controls.applySpinInertia(dt);
 
@@ -817,22 +902,6 @@ export function start(container: HTMLElement, opts: StartOpts = {}): Handle | nu
     const buttonish = mode === 'button' || pendingMode === 'button';
     if (buttonish) spinner.quaternion.slerp(IDENTITY_Q, Math.min(1, 2.5 * dt));
 
-    // lean ratio in [-1,1] per axis, by priority: gyro (phone) > mouse (desktop)
-    // > slow idle auto-lean; driven directly (never divide by a knob)
-    let leanY = 0;
-    let leanX = 0;
-    const lean = tilt.getLean();
-    if (lean) {
-      leanY = lean.gamma;
-      leanX = -lean.beta;
-    } else if (mouseSeen) {
-      leanY = mouseX * MOUSE_GAIN;
-      leanX = -mouseY * MOUSE_GAIN * 0.5;
-    } else if (!reduce && !controls.hasInteracted()) {
-      const phase = (now / 1000) * IDLE_HZ * Math.PI * 2;
-      leanY = Math.sin(phase) * IDLE_AMP;
-      leanX = Math.cos(phase) * IDLE_AMP * 0.4;
-    }
     // the button leans only subtly — a big face-on slab shouldn't wander
     const leanScale = buttonish ? 0.25 : 1;
     pivot.rotation.y = leanY * TILT_GAIN * leanScale;
@@ -843,10 +912,12 @@ export function start(container: HTMLElement, opts: StartOpts = {}): Handle | nu
       shakeAge < 900 ? Math.sin(shakeAge / 45) * 0.055 * Math.exp(-shakeAge / 260) : 0;
     rim.position.x = leanY * LIGHT_RAKE;
     rim.position.y = 0.3 + leanX * 0.8;
-    // finale flash: the vermilion light surges while the button assembles
+    // coronation flash (long surge when the button completes) + a sharp spike
+    // per forge strike
     const flashAge = now - flashAt;
-    rim.intensity =
-      flashAge < 2400 ? 1.6 + 4.2 * Math.sin(Math.min(1, flashAge / 2400) * Math.PI) : 1.6;
+    const surge = flashAge < 2400 ? 4.2 * Math.sin(Math.min(1, flashAge / 2400) * Math.PI) : 0;
+    const spike = FORGE_SPIKE * Math.exp(-(now - impactAt) / 160);
+    rim.intensity = 1.6 + surge + spike;
 
     renderer.render(scene, camera);
   });
@@ -859,6 +930,7 @@ export function start(container: HTMLElement, opts: StartOpts = {}): Handle | nu
       controls.dispose();
       tilt.dispose();
       window.removeEventListener('pointermove', onMouse);
+      window.removeEventListener('devicemotion', onMotion);
       ro.disconnect();
       for (const b of bars) {
         b.mesh.geometry.dispose();
