@@ -40,6 +40,8 @@ const GRIP_LIN_DAMP = 9; // linear damping while held (tracks without oscillatin
 const GRIP_ANG_DAMP = 1.1; // angular damping while held — low, so spins persist
 const ACCENT_MASS = 2.4; // the opinion bar is heavier to swing and to spin
 const ANGVEL_MAX = 22; // rad/s cap so a wild fling can't spin-blur the bar
+const GRAV_HELD = 5.2; // gravity on a held bar — grab an end and it hangs down
+const GRAV_FLIGHT = 2.8; // gravity on a flying bar (fades near home so it still seats)
 const FINALE_AT = 10; // double-taps before the mark concedes the button
 const SCATTER_SPEED = 3.0; // double-tap explosion speed
 const TILT_GAIN = 0.4; // how far the object leans with the phone (rad at full tilt)
@@ -71,6 +73,7 @@ const BARS: readonly [number, number, number, number, boolean][] = [
 const VB_W = 132;
 const VB_H = 168;
 const MONO_WIDTH = 1.12; // world units — the mark is the hero, it fills the frame
+const IDENTITY_Q = new THREE.Quaternion();
 
 const buzz = (pattern: number | number[]) => {
   try {
@@ -122,6 +125,7 @@ type BarSim = {
   targetColor: THREE.Color;
   baseEnv: number;
   targetEnv: number;
+  targetScale: THREE.Vector3; // button formation stretches the short bars
   kMul: number; // per-bar spring stiffness multiplier (the opinion bar is stiffer)
   dampMul: number;
   mass: number;
@@ -201,6 +205,7 @@ function buildMonogram(): { group: THREE.Group; bars: BarSim[]; accentMesh: THRE
       targetColor: mat.color.clone(),
       baseEnv: mat.envMapIntensity,
       targetEnv: mat.envMapIntensity,
+      targetScale: new THREE.Vector3(1, 1, 1),
       kMul: accent ? ACCENT_K_MUL : 1,
       dampMul: accent ? ACCENT_DAMP_MUL : 1,
       mass: accent ? ACCENT_MASS : 1,
@@ -293,7 +298,12 @@ function createGrabControls(
   spinner: THREE.Object3D,
   monogram: THREE.Object3D,
   bars: BarSim[],
-  opts: { canGrab: () => boolean; onThrow: (accent: boolean) => void; onDoubleTap: () => void },
+  opts: {
+    canGrab: () => boolean;
+    canSpin: () => boolean;
+    onThrow: (accent: boolean) => void;
+    onDoubleTap: () => void;
+  },
 ): GrabControls {
   let interacted = false;
   let spinDragging = false;
@@ -378,7 +388,7 @@ function createGrabControls(
         return;
       }
     }
-    spinDragging = true;
+    if (opts.canSpin()) spinDragging = true;
   };
 
   const onMove = (e: PointerEvent) => {
@@ -469,6 +479,7 @@ function gripStep(bar: BarSim, dt: number) {
   const gripPos = mesh.position.clone().add(worldOffset);
   const force = grip.target.clone().sub(gripPos).multiplyScalar(GRIP_K);
   vel.addScaledVector(force, dt / bar.mass);
+  vel.y -= GRAV_HELD * dt; // gravity acts on the centre → the far end hangs down
   vel.multiplyScalar(Math.max(0, 1 - GRIP_LIN_DAMP * dt));
   angVel.addScaledVector(
     worldOffset.clone().cross(force),
@@ -492,6 +503,8 @@ function stepBar(bar: BarSim, dt: number): boolean {
   const acc = home.clone().sub(mesh.position).multiplyScalar(SPRING_K * bar.kMul);
   acc.addScaledVector(vel, -SPRING_DAMP * bar.dampMul);
   vel.addScaledVector(acc, dt);
+  // a thrown bar arcs downward; gravity fades near home so the seat stays exact
+  vel.y -= GRAV_FLIGHT * clamp01(mesh.position.distanceTo(home) / 0.5) * dt;
   mesh.position.addScaledVector(vel, dt);
   // torque spring toward the target orientation
   const qErr = mesh.quaternion.clone().multiply(homeQuat.clone().invert());
@@ -611,16 +624,25 @@ export function start(container: HTMLElement, opts: StartOpts = {}): Handle | nu
   let flashAt = -1e9; // finale light flash timestamp
   const throwTimes: number[] = [];
 
-  // the finale formation: the five bars turn 90° and stack into one chunky
-  // vermilion slab — "a button, built the way I build platforms", literally.
-  // Tall bars form the face; short ones pack behind as the body.
+  // the finale formation: the five bars turn 90° and become one clean slab —
+  // "a button, built the way I build platforms", literally. Three exact rows
+  // form the face (short bars stretch to full width); the remaining two pack
+  // behind as the body so it reads as ONE machined button, not stacked bars.
+  const s = MONO_WIDTH / VB_W;
+  const rowH = 25 * s; // every bar is 25 units wide in the SVG
+  const faceW = 168 * s; // tall-bar length = the button's width
+  const stretch = 168 / 79; // short bars (79) stretch to the tall length
   const zRot = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), Math.PI / 2);
-  const BUTTON_SLOTS: { pos: THREE.Vector3; quat: THREE.Quaternion }[] = [
-    { pos: new THREE.Vector3(-0.36, 0, -0.08), quat: zRot.clone() },
-    { pos: new THREE.Vector3(0, 0.048, 0), quat: zRot.clone() },
-    { pos: new THREE.Vector3(0, -0.048, 0), quat: zRot.clone() },
-    { pos: new THREE.Vector3(0.36, 0, -0.08), quat: zRot.clone() },
-    { pos: new THREE.Vector3(0, 0, -0.14), quat: zRot.clone() },
+  const BUTTON_SLOTS: { pos: THREE.Vector3; quat: THREE.Quaternion; scale: THREE.Vector3 }[] = [
+    // short → top face row, stretched full width
+    { pos: new THREE.Vector3(0, rowH, 0), quat: zRot.clone(), scale: new THREE.Vector3(1, stretch, 1) },
+    // tall → middle face row
+    { pos: new THREE.Vector3(0, 0, 0), quat: zRot.clone(), scale: new THREE.Vector3(1, 1, 1) },
+    // tall accent → bottom face row (the opinion carries the baseline)
+    { pos: new THREE.Vector3(0, -rowH, 0), quat: zRot.clone(), scale: new THREE.Vector3(1, 1, 1) },
+    // shorts → the body, packed behind the face
+    { pos: new THREE.Vector3(-faceW / 4, 0, -BAR_DEPTH), quat: zRot.clone(), scale: new THREE.Vector3(1.4, 1, 1) },
+    { pos: new THREE.Vector3(faceW / 4, 0, -BAR_DEPTH), quat: zRot.clone(), scale: new THREE.Vector3(1.4, 1, 1) },
   ];
   // deeper than the token — the white key/hemisphere lights lift it back up to
   // brand vermilion on screen (targeting #ff5a3c directly renders salmon)
@@ -634,11 +656,13 @@ export function start(container: HTMLElement, opts: StartOpts = {}): Handle | nu
         bar.homeQuat.copy(BUTTON_SLOTS[i].quat);
         bar.targetColor.copy(vermilion);
         bar.targetEnv = 0.3; // keep the slab saturated vermilion, not salmon
+        bar.targetScale.copy(BUTTON_SLOTS[i].scale);
       } else {
         bar.home.copy(bar.markHome);
         bar.homeQuat.identity();
         bar.targetColor.copy(bar.baseColor);
         bar.targetEnv = bar.baseEnv;
+        bar.targetScale.set(1, 1, 1);
       }
     }
   };
@@ -698,6 +722,8 @@ export function start(container: HTMLElement, opts: StartOpts = {}): Handle | nu
 
   const controls = createGrabControls(canvas, camera, spinner, monogram, bars, {
     canGrab: () => riseDone,
+    // spinning the button would reveal it's five stacked bars — face-on only
+    canSpin: () => mode === 'mark' && pendingMode !== 'button',
     onThrow: (accent) => {
       attempts += 1;
       buzz(10);
@@ -777,11 +803,12 @@ export function start(container: HTMLElement, opts: StartOpts = {}): Handle | nu
           opts.onSettle?.(attempts, allHome);
         }
       }
-      // finale colour morph: cream ⇄ vermilion while the bars are in flight
+      // finale morph: colour, reflections and shape tween while the bars fly
       const cl = Math.min(1, COLOR_LERP * dtSim);
       for (const bar of bars) {
         if (!bar.mat.color.equals(bar.targetColor)) bar.mat.color.lerp(bar.targetColor, cl);
         bar.mat.envMapIntensity = lerp(bar.mat.envMapIntensity, bar.targetEnv, cl);
+        bar.mesh.scale.lerp(bar.targetScale, cl);
       }
     }
     const risen = clamp01((now - riseStart) / riseSpan);
@@ -789,6 +816,10 @@ export function start(container: HTMLElement, opts: StartOpts = {}): Handle | nu
     camera.position.z = lerp(DOLLY_FROM, DOLLY_TO, easeOutCubic(risen)); // slow push-in
 
     controls.applySpinInertia(dt);
+
+    // button mode: unwind any user spin so the slab faces the camera dead-on
+    const buttonish = mode === 'button' || pendingMode === 'button';
+    if (buttonish) spinner.quaternion.slerp(IDENTITY_Q, Math.min(1, 2.5 * dt));
 
     // lean ratio in [-1,1] per axis, by priority: gyro (phone) > mouse (desktop)
     // > slow idle auto-lean; driven directly (never divide by a knob)
@@ -806,8 +837,10 @@ export function start(container: HTMLElement, opts: StartOpts = {}): Handle | nu
       leanY = Math.sin(phase) * IDLE_AMP;
       leanX = Math.cos(phase) * IDLE_AMP * 0.4;
     }
-    pivot.rotation.y = leanY * TILT_GAIN;
-    pivot.rotation.x = leanX * TILT_GAIN;
+    // the button leans only subtly — a big face-on slab shouldn't wander
+    const leanScale = buttonish ? 0.25 : 1;
+    pivot.rotation.y = leanY * TILT_GAIN * leanScale;
+    pivot.rotation.x = leanX * TILT_GAIN * leanScale;
     // defiant head-shake after rapid-fire throws — a decaying roll wiggle
     const shakeAge = now - shakeAt;
     pivot.rotation.z =
