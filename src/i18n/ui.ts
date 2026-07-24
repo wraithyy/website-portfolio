@@ -33,13 +33,14 @@ export const ui = {
 
     'exp.label': 'Capabilities',
     'exp.title': 'What I bring to a project.',
+    'exp.proof': 'delivered',
     'exp.note': 'Real deliveries; I deliberately don’t name clients.',
 
     'about.label': 'About',
     'about.title': 'I dig into how things work underneath.',
     'about.bio':
-      'I wrote my first PHP website in sixth grade and never stopped. Today that means React and TanStack down to the internals — and knowing when a project needs boring and proven instead. I work AI-first, with one hard rule:',
-    'about.aiStance': 'AI drafts, an engineer signs. Vibecoding is not engineering.',
+      'I wrote my first PHP website in sixth grade and never stopped. Today that means React and TanStack down to the internals — I love exploring new tech and passing it on to colleagues, and I know when a project needs boring and proven instead. I use AI heavily, every day, with one hard rule:',
+    'about.aiStance': 'AI is my lever, not my autopilot. Vibecoding is not engineering.',
     'about.stackLabel': 'Stack',
     'about.employersLabel': 'Where I’ve worked',
     'about.factsLabel': 'For the record',
@@ -98,13 +99,14 @@ export const ui = {
 
     'exp.label': 'Co umím',
     'exp.title': 'Co do projektu přináším.',
+    'exp.proof': 'dodáno',
     'exp.note': 'Reálné dodávky; klienty záměrně nejmenuji.',
 
     'about.label': 'O mně',
     'about.title': 'Zajímá mě, jak věci fungují uvnitř.',
     'about.bio':
-      'První web jsem v PHP napsal v šesté třídě a nepřestal. Dnes to znamená React a TanStack až do zdrojáků — a vědomí, kdy projekt potřebuje raději nudné a prověřené. Pracuju AI-first s jedním tvrdým pravidlem:',
-    'about.aiStance': 'AI navrhne, inženýr podepíše. Vibecoding není inženýrství.',
+      'První web jsem napsal v PHP v šesté třídě a od té doby mě to nepustilo. Dnes stavím na Reactu a TanStacku a znám je až pod kapotu — rád zkoumám nové technologie a předávám je dál kolegům, ale vím, kdy projekt naopak potřebuje nudné a prověřené řešení. AI používám naplno každý den, s jedním tvrdým pravidlem:',
+    'about.aiStance': 'AI je moje páka, ne autopilot. Vibecoding není inženýrství.',
     'about.stackLabel': 'Stack',
     'about.employersLabel': 'Kde jsem pracoval',
     'about.factsLabel': 'Pro pořádek',
