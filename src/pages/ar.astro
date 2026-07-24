@@ -373,10 +373,21 @@ import { email } from '../data/site';
     // hovering the label lifts the 3D button face under it
     cta.addEventListener('pointerenter', () => handle.setCtaHover(true));
     cta.addEventListener('pointerleave', () => handle.setCtaHover(false));
-    // iOS gates gyro/motion behind a system prompt that must come from a
-    // gesture — the first touch RELEASE is that gesture (WebKit grants user
-    // activation on touchend/pointerup, NOT on pointerdown)
-    stage.addEventListener('pointerup', () => void handle.enableTilt(), { once: true });
+    // iOS gates gyro/motion behind a system prompt that must come from real
+    // user activation — WebKit grants it on touchend/click. Keep asking on
+    // each tap until it's granted (or clearly refused a few times), because
+    // a single silent failure would kill gyro for the whole visit.
+    let motionTries = 0;
+    const askMotion = () => {
+      void handle.enableTilt().then((ok) => {
+        if (ok || ++motionTries >= 4) {
+          stage.removeEventListener('click', askMotion);
+          stage.removeEventListener('touchend', askMotion);
+        }
+      });
+    };
+    stage.addEventListener('click', askMotion);
+    stage.addEventListener('touchend', askMotion);
     addEventListener('pagehide', () => handle.stop(), { once: true });
     // bfcache back-navigation would restore a stopped canvas — start fresh
     addEventListener('pageshow', (e) => {

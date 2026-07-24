@@ -29,7 +29,7 @@ const COLOR_LERP = 4; // per-second rate for the finale colour morph
 // the forge: after the finale blast, the cream bars strike the button one by
 // one from behind — each impact kicks the camera, spikes the light and grows
 // the button a step. The capabilities literally forge the button.
-const FORGE_DELAY = 750; // ms of scattered suspense before the first strike
+const FORGE_DELAY = 1000; // ms of scattered suspense before the first strike
 const FORGE_GAP = 260; // ms after a strike lands before the next bar launches
 const FORGE_KICK = 0.09; // camera punch-in per impact (world units)
 const FORGE_SPIKE = 2.4; // rim-light surge per impact
