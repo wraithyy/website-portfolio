@@ -24,7 +24,7 @@ export const ui = {
     'story.intro':
       'I architect and lead frontend platforms for insurance, energy and automotive companies. This is the foundation: six steps, in order, none skipped.',
     'story.facts':
-      'Josef Kvapil · senior frontend architect · React & TypeScript · 10+ years · banking, insurance, energy · Liberec, CZ',
+      'Josef Kvapil · senior frontend architect · React & TypeScript · 10+ years · banking, insurance, energy, automotive · Liberec, CZ',
     'story.bridge': 'Platforms are the same six steps, at scale.',
     'story.bridgeMeta': 'architecture · leadership · React · TypeScript · TanStack',
     'story.btnSketch': 'btn / primary',
@@ -75,7 +75,7 @@ export const ui = {
   cs: {
     'meta.title': 'Josef Kvapil — Frontend architekt',
     'meta.description':
-      'Frontend architekt a team lead. React a TypeScript pro bankovnictví, energetiku a pojišťovnictví — a open-source nástroje, které drží kód v lati.',
+      'Frontend architekt a team lead. React a TypeScript pro bankovnictví, energetiku a pojišťovnictví — a open-source lintovací nástroje na npm.',
     'nav.skip': 'Přeskočit na hlavní obsah',
     'nav.experience': 'Co umím',
     'nav.about': 'O mně',
@@ -90,7 +90,7 @@ export const ui = {
     'story.intro':
       'Navrhuju a vedu frontend platformy pro pojišťovnictví, energetiku a automotive. Tady jsou základy: šest kroků, popořadě, žádný se nepřeskakuje.',
     'story.facts':
-      'Josef Kvapil · senior frontend architekt · React & TypeScript · 10+ let · bankovnictví, pojišťovnictví, energetika · Liberec, CZ',
+      'Josef Kvapil · senior frontend architekt · React & TypeScript · 10+ let · bankovnictví, pojišťovnictví, energetika, automotive · Liberec, CZ',
     'story.bridge': 'Platformy jsou těch samých šest kroků, jen ve větším.',
     'story.bridgeMeta': 'architektura · leadership · React · TypeScript · TanStack',
     'story.btnSketch': 'btn / primary',
@@ -114,7 +114,7 @@ export const ui = {
       'AWS Certified Cloud Practitioner · Anthropic Claude Code certifikace · mentoring a interní přednášky · CZ / EN / DE',
     'contact.label': 'Kontakt',
     'contact.title': 'Přineste mi tvrdý oříšek.',
-    'contact.body': 'Rád se zakousnu do zajímavého frontend problému, architektury i open-source spolupráce.',
+    'contact.body': 'Rád se zakousnu do tvrdých frontend problémů — architektura, delivery i open source.',
     'contact.cv': 'stáhnout životopis (PDF)',
     'contact.meta': 'otevřený novým projektům · remote i hybrid · Liberec / Praha · CZ / EN',
     'contact.ctaLabel': 'btn / váš-projekt',
