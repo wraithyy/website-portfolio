@@ -35,15 +35,15 @@ export const storySteps: StoryStep[] = [
     note: { en: 'fig. 02 — interface attached', cs: 'obr. 02 — rozhraní připojeno' },
   },
   {
-    label: { en: '03 — Design systems', cs: '03 — Design systémy' },
+    label: { en: '03 — Components', cs: '03 — Komponenty' },
     title: { en: 'Every state is a decision.', cs: 'Každý stav je rozhodnutí.' },
     onButton: {
       en: 'hover, pressed, disabled — each decided once',
       cs: 'hover, pressed, disabled — o každém rozhodnuto jednou',
     },
     onPlatform: {
-      en: 'colors, forms, patterns — each decided once, for every team',
-      cs: 'barvy, formuláře, vzory — o každém rozhodnuto jednou, pro všechny týmy',
+      en: 'buttons, forms, patterns — each decided once, for every team',
+      cs: 'tlačítka, formuláře, vzory — o každém rozhodnuto jednou, pro všechny týmy',
     },
     note: { en: 'fig. 03 — state: hover, 400ms ease', cs: 'obr. 03 — stav: hover, 400 ms ease' },
   },

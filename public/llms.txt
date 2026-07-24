@@ -8,7 +8,7 @@
 
 The site is one page in two languages: https://jkvapil.cz (English) and
 https://jkvapil.cz/cs/ (Czech). Its hero narrates six steps of frontend craft
-on a single button: architecture, TypeScript contracts, design systems,
+on a single button: architecture, TypeScript contracts, component systems,
 accessibility, review & AI leverage, delivery.
 
 ## Capabilities
