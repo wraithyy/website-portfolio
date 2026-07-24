@@ -27,6 +27,7 @@ import { email } from '../data/site';
       auto-rotate-delay="600"
       rotation-per-second="18deg"
       interaction-prompt="none"
+      animation-name="build"
       shadow-intensity="1.2"
       shadow-softness="1"
       environment-image="neutral"
@@ -182,6 +183,7 @@ import { email } from '../data/site';
 
   const mv = document.getElementById('ar-mv') as HTMLElement & {
     canActivateAR?: boolean;
+    play?: (opts?: { repetitions?: number }) => void;
   };
   const arBtn = document.getElementById('ar-btn')!;
   const toast = document.getElementById('ar-toast')!;
@@ -190,8 +192,14 @@ import { email } from '../data/site';
   const syncAr = () => {
     arBtn.hidden = !mv?.canActivateAR;
   };
-  mv?.addEventListener('load', syncAr);
+  // play the "build" animation once on load; tap the model to replay it
+  const playBuild = () => mv?.play?.({ repetitions: 1 });
+  mv?.addEventListener('load', () => {
+    syncAr();
+    playBuild();
+  });
   mv?.addEventListener('ar-status', syncAr);
+  mv?.addEventListener('click', playBuild);
   setTimeout(syncAr, 1200);
 
   // drive the loading progress bar
