@@ -114,6 +114,19 @@ import { email } from '../data/site';
     text-shadow:
       0 1px 0 rgba(255, 255, 255, 0.32),
       0 -1px 1px rgba(0, 0, 0, 0.42);
+    transition:
+      color 0.25s ease,
+      text-shadow 0.25s ease;
+  }
+  /* hover: the 3D face lifts (driven in the scene); the cut deepens with it */
+  .ar__cta:hover .ar__cta-text {
+    color: rgba(28, 6, 2, 0.88);
+    text-shadow:
+      0 2px 0 rgba(255, 255, 255, 0.38),
+      0 -2px 2px rgba(0, 0, 0, 0.5);
+  }
+  .ar__cta:hover {
+    cursor: pointer;
   }
   /* the engraver head cuts left→right; letters appear in its wake */
   @keyframes ar-engrave-text {
@@ -357,6 +370,9 @@ import { email } from '../data/site';
   } else {
     // gyro is a free enhancement where no permission is needed (Android);
     // on iOS we skip the permission nag — mouse/idle lean covers the light
+    // hovering the label lifts the 3D button face under it
+    cta.addEventListener('pointerenter', () => handle.setCtaHover(true));
+    cta.addEventListener('pointerleave', () => handle.setCtaHover(false));
     addEventListener('pagehide', () => handle.stop(), { once: true });
     // bfcache back-navigation would restore a stopped canvas — start fresh
     addEventListener('pageshow', (e) => {

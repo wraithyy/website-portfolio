@@ -33,9 +33,15 @@ const FORGE_DELAY = 750; // ms of scattered suspense before the first strike
 const FORGE_GAP = 260; // ms after a strike lands before the next bar launches
 const FORGE_KICK = 0.09; // camera punch-in per impact (world units)
 const FORGE_SPIKE = 2.4; // rim-light surge per impact
+const GROW_MS = 300; // per-strike button growth tween (easeOutBack, fixed length)
 const TILT_GRAV = 1.7; // phone tilt (or mouse) = gravity for loose bars — they slide
 const SHAKE_THRESHOLD = 14; // m/s² of device shake that triggers a scatter
 const SHAKE_DEBOUNCE_MS = 1600;
+const JERK_THRESHOLD = 5; // lean-ratio/s of gyro twist that rattles the seated mark
+const JERK_DEBOUNCE_MS = 900;
+const JERK_VEL = 0.14; // how hard the rattle nudges each bar per unit of jerk
+const HOVER_LIFT = 0.12; // hovered button face rises toward the viewer
+const HOVER_GLOW = 0.9; // extra rim light while hovered
 const BEVEL = 0.009; // chamfered edges — machined objects have chamfers, and the
 const BEVEL_T = 0.01; // rim light needs an edge to catch
 const SEAT_POS_EPS = 0.01; // "close enough" to click home
@@ -119,6 +125,8 @@ export type Handle = {
   enableTilt: () => Promise<boolean>;
   /** Whether tilt needs a user gesture first (iOS 13+). */
   needsTiltGesture: boolean;
+  /** Hovering the CTA label lifts the 3D button face and brightens the light. */
+  setCtaHover: (hover: boolean) => void;
   /** Tear down: stop the loop, dispose GPU resources, remove listeners. */
   stop: () => void;
 };
@@ -636,7 +644,16 @@ export function start(container: HTMLElement, opts: StartOpts = {}): Handle | nu
   let impactAt = -1e9; // last forge strike (camera kick + light spike)
   let absorbed = 0; // cream bars forged into the button so far
   let lastShake = -1e9;
+  let lastJerk = -1e9;
+  let prevLeanY = 0;
+  let prevLeanX = 0;
+  let ctaHover = false;
+  let hoverGlow = 0; // smoothed 0..1 hover state driving the lift + light
   let forgeQueue: BarSim[] = []; // strike order — each launches when the previous lands
+  // per-strike growth tween: fixed-length easeOutBack, immune to frame rate
+  let growStart = -1e9;
+  const growFrom = new THREE.Vector3(1, 1, 1);
+  const growTo = new THREE.Vector3(1, 1, 1);
   const throwTimes: number[] = [];
 
   // the finale formation: THE OPINION BECOMES THE BUTTON. The vermilion bar
@@ -829,6 +846,26 @@ export function start(container: HTMLElement, opts: StartOpts = {}): Handle | nu
       leanY = Math.sin(phase) * IDLE_AMP;
       leanX = Math.cos(phase) * IDLE_AMP * 0.4;
     }
+    // gyro jerk: twist the phone sharply and the seated mark rattles in place
+    if (lean && riseDone && mode === 'mark' && !pendingMode) {
+      const jerk = Math.hypot(leanY - prevLeanY, leanX - prevLeanX) / Math.max(dt, 1e-3);
+      if (jerk > JERK_THRESHOLD && now - lastJerk > JERK_DEBOUNCE_MS) {
+        lastJerk = now;
+        buzz([8, 30, 8]);
+        for (const bar of bars) {
+          if (bar.grabbed || bar.live) continue;
+          bar.vel.set(
+            THREE.MathUtils.clamp(((leanY - prevLeanY) / dt) * JERK_VEL, -0.9, 0.9),
+            THREE.MathUtils.clamp(((leanX - prevLeanX) / dt) * JERK_VEL, -0.9, 0.9),
+            0.2 + Math.random() * 0.15,
+          );
+          bar.angVel.set((Math.random() - 0.5) * 1.2, (Math.random() - 0.5) * 1.2, 0);
+          bar.live = true;
+        }
+      }
+    }
+    prevLeanY = leanY;
+    prevLeanX = leanX;
 
     if (!riseDone) {
       // rise: each bar thickens + lifts toward the viewer, overshooting as it seats
@@ -871,12 +908,16 @@ export function start(container: HTMLElement, opts: StartOpts = {}): Handle | nu
         if (stepBar(bar, dtSim)) {
           buzz(8); // clicked home
           if (buttonForge && !bar.accent) {
-            // a forge strike: the button takes the hit and grows — NOW
+            // a forge strike: the button takes the hit and grows — a fixed
+            // 300ms overshoot tween from wherever it is to the next step
             absorbed += 1;
             impactAt = now;
             buzz(26);
             const accent = bars[2];
-            accent.targetScale.lerpVectors(BTN_SCALE_FROM, BTN_SCALE_TO, absorbed / 4);
+            growFrom.copy(accent.mesh.scale);
+            growTo.lerpVectors(BTN_SCALE_FROM, BTN_SCALE_TO, absorbed / 4);
+            accent.targetScale.copy(growTo);
+            growStart = now;
             const next = forgeQueue[absorbed];
             if (next) next.launchAt = now + FORGE_GAP; // release the next striker
           }
@@ -893,10 +934,16 @@ export function start(container: HTMLElement, opts: StartOpts = {}): Handle | nu
       // finale morph: colour, reflections and shape tween while the bars fly —
       // on REAL time, so each strike pumps the button up even during slow-mo
       const cl = Math.min(1, COLOR_LERP * dt);
+      const growT = (now - growStart) / GROW_MS;
       for (const bar of bars) {
         if (!bar.mat.color.equals(bar.targetColor)) bar.mat.color.lerp(bar.targetColor, cl);
         bar.mat.envMapIntensity = lerp(bar.mat.envMapIntensity, bar.targetEnv, cl);
-        bar.mesh.scale.lerp(bar.targetScale, cl);
+        if (bar.accent && growT <= 1) {
+          // the strike tween owns the button's scale while it runs
+          bar.mesh.scale.lerpVectors(growFrom, growTo, easeOutBack(clamp01(growT)));
+        } else {
+          bar.mesh.scale.lerp(bar.targetScale, cl);
+        }
       }
     }
     const risen = clamp01((now - riseStart) / riseSpan);
@@ -920,12 +967,19 @@ export function start(container: HTMLElement, opts: StartOpts = {}): Handle | nu
       shakeAge < 900 ? Math.sin(shakeAge / 45) * 0.055 * Math.exp(-shakeAge / 260) : 0;
     rim.position.x = leanY * LIGHT_RAKE;
     rim.position.y = 0.3 + leanX * 0.8;
+    // hover: the button face rises toward the viewer and the light leans in
+    hoverGlow = lerp(hoverGlow, ctaHover && mode === 'button' ? 1 : 0, Math.min(1, 10 * dt));
+    const accentBar = bars[2];
+    if (mode === 'button' && !accentBar.live && !accentBar.grabbed) {
+      accentBar.mesh.position.z = accentBar.home.z + hoverGlow * HOVER_LIFT;
+    }
+
     // coronation flash (long surge when the button completes) + a sharp spike
-    // per forge strike
+    // per forge strike + the hover glow
     const flashAge = now - flashAt;
     const surge = flashAge < 2400 ? 4.2 * Math.sin(Math.min(1, flashAge / 2400) * Math.PI) : 0;
     const spike = FORGE_SPIKE * Math.exp(-(now - impactAt) / 160);
-    rim.intensity = 1.6 + surge + spike;
+    rim.intensity = 1.6 + surge + spike + hoverGlow * HOVER_GLOW;
 
     renderer.render(scene, camera);
   });
@@ -933,6 +987,9 @@ export function start(container: HTMLElement, opts: StartOpts = {}): Handle | nu
   return {
     enableTilt: tilt.enableTilt,
     needsTiltGesture: tilt.needsGesture,
+    setCtaHover: (hover: boolean) => {
+      ctaHover = hover;
+    },
     stop: () => {
       renderer.setAnimationLoop(null);
       controls.dispose();
