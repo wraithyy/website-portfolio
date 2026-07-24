@@ -37,9 +37,10 @@ const GROW_MS = 300; // per-strike button growth tween (easeOutBack, fixed lengt
 const TILT_GRAV = 1.7; // phone tilt (or mouse) = gravity for loose bars — they slide
 const SHAKE_THRESHOLD = 14; // m/s² of device shake that triggers a scatter
 const SHAKE_DEBOUNCE_MS = 1600;
-const JERK_THRESHOLD = 5; // lean-ratio/s of gyro twist that rattles the seated mark
-const JERK_DEBOUNCE_MS = 900;
-const JERK_VEL = 0.14; // how hard the rattle nudges each bar per unit of jerk
+const SPILL_ON = 0.55; // gyro lean beyond this breaks the seated bars loose…
+const SPILL_OFF = 0.38; // …and levelling back under this snaps them home
+const SPILL_GRAV = 4.2; // downhill acceleration while spilled
+const SPILL_RANGE = 1.5; // how far the spilled bars may slide
 const HOVER_LIFT = 0.12; // hovered button face rises toward the viewer
 const HOVER_GLOW = 0.9; // extra rim light while hovered
 const BEVEL = 0.009; // chamfered edges — machined objects have chamfers, and the
@@ -644,9 +645,7 @@ export function start(container: HTMLElement, opts: StartOpts = {}): Handle | nu
   let impactAt = -1e9; // last forge strike (camera kick + light spike)
   let absorbed = 0; // cream bars forged into the button so far
   let lastShake = -1e9;
-  let lastJerk = -1e9;
-  let prevLeanY = 0;
-  let prevLeanX = 0;
+  let spilling = false; // gyro tilt past SPILL_ON: the bars slide downhill
   let ctaHover = false;
   let hoverGlow = 0; // smoothed 0..1 hover state driving the lift + light
   let forgeQueue: BarSim[] = []; // strike order — each launches when the previous lands
@@ -782,6 +781,23 @@ export function start(container: HTMLElement, opts: StartOpts = {}): Handle | nu
   if (typeof DeviceMotionEvent !== 'undefined' && !motionGated) {
     window.addEventListener('devicemotion', onMotion);
   }
+  /** iOS gates motion + orientation behind one system prompt; called from the
+      first user gesture it unlocks tilt light, spill and shake in one go. */
+  const enableMotionAndTilt = async (): Promise<boolean> => {
+    const ok = await tilt.enableTilt();
+    if (motionGated) {
+      try {
+        // same static-method shape as DeviceOrientationEvent — cast unavoidable
+        const api = DeviceMotionEvent as unknown as OrientationPermissionApi;
+        if ((await api.requestPermission?.()) === 'granted') {
+          window.addEventListener('devicemotion', onMotion);
+        }
+      } catch {
+        /* denied — shake stays off, everything else keeps working */
+      }
+    }
+    return ok;
+  };
 
   const controls = createGrabControls(canvas, camera, spinner, monogram, bars, {
     // the button is a button — no grabbing, no spinning; the mark is the toy
@@ -846,26 +862,24 @@ export function start(container: HTMLElement, opts: StartOpts = {}): Handle | nu
       leanY = Math.sin(phase) * IDLE_AMP;
       leanX = Math.cos(phase) * IDLE_AMP * 0.4;
     }
-    // gyro jerk: twist the phone sharply and the seated mark rattles in place
+    // gyro spill: tilt the phone hard and the seated bars break loose and
+    // slide downhill; level it back and they fly home and click in — the
+    // "it snaps back" thesis you can feel in your wrist. Gyro only (a mouse
+    // lean would spill constantly), with hysteresis so it never flutters.
     if (lean && riseDone && mode === 'mark' && !pendingMode) {
-      const jerk = Math.hypot(leanY - prevLeanY, leanX - prevLeanX) / Math.max(dt, 1e-3);
-      if (jerk > JERK_THRESHOLD && now - lastJerk > JERK_DEBOUNCE_MS) {
-        lastJerk = now;
-        buzz([8, 30, 8]);
+      const leanMag = Math.hypot(leanY, leanX);
+      if (!spilling && leanMag > SPILL_ON) {
+        spilling = true;
+        buzz(14);
         for (const bar of bars) {
-          if (bar.grabbed || bar.live) continue;
-          bar.vel.set(
-            THREE.MathUtils.clamp(((leanY - prevLeanY) / dt) * JERK_VEL, -0.9, 0.9),
-            THREE.MathUtils.clamp(((leanX - prevLeanX) / dt) * JERK_VEL, -0.9, 0.9),
-            0.2 + Math.random() * 0.15,
-          );
-          bar.angVel.set((Math.random() - 0.5) * 1.2, (Math.random() - 0.5) * 1.2, 0);
-          bar.live = true;
+          if (!bar.grabbed) bar.live = true; // break the whole mark loose
         }
+      } else if (spilling && leanMag < SPILL_OFF) {
+        spilling = false; // the springs take over and carry them home
       }
+    } else {
+      spilling = false;
     }
-    prevLeanY = leanY;
-    prevLeanX = leanX;
 
     if (!riseDone) {
       // rise: each bar thickens + lifts toward the viewer, overshooting as it seats
@@ -899,6 +913,15 @@ export function start(container: HTMLElement, opts: StartOpts = {}): Handle | nu
         // phone tilt (or the mouse) is gravity for anything loose — it slides
         bar.vel.x += leanY * TILT_GRAV * dtSim;
         bar.vel.y += leanX * TILT_GRAV * dtSim;
+        if (spilling) {
+          // no homing while spilled — pure downhill slide inside a soft bound
+          bar.vel.x += leanY * SPILL_GRAV * dtSim;
+          bar.vel.y += leanX * SPILL_GRAV * dtSim;
+          bar.vel.multiplyScalar(Math.max(0, 1 - 1.4 * dtSim));
+          bar.mesh.position.addScaledVector(bar.vel, dtSim);
+          if (bar.mesh.position.length() > SPILL_RANGE) bar.mesh.position.setLength(SPILL_RANGE);
+          continue;
+        }
         if (now < bar.launchAt) {
           // forge suspense: hang scattered, coasting, until this bar's strike
           bar.vel.multiplyScalar(Math.max(0, 1 - 1.6 * dtSim));
@@ -985,7 +1008,7 @@ export function start(container: HTMLElement, opts: StartOpts = {}): Handle | nu
   });
 
   return {
-    enableTilt: tilt.enableTilt,
+    enableTilt: enableMotionAndTilt,
     needsTiltGesture: tilt.needsGesture,
     setCtaHover: (hover: boolean) => {
       ctaHover = hover;

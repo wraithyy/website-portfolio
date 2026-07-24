@@ -373,6 +373,9 @@ import { email } from '../data/site';
     // hovering the label lifts the 3D button face under it
     cta.addEventListener('pointerenter', () => handle.setCtaHover(true));
     cta.addEventListener('pointerleave', () => handle.setCtaHover(false));
+    // iOS gates gyro/motion behind a system prompt that must come from a
+    // gesture — the very first touch of the toy is that gesture
+    stage.addEventListener('pointerdown', () => void handle.enableTilt(), { once: true });
     addEventListener('pagehide', () => handle.stop(), { once: true });
     // bfcache back-navigation would restore a stopped canvas — start fresh
     addEventListener('pageshow', (e) => {
