@@ -152,6 +152,7 @@ type BarSim = {
   angVel: THREE.Vector3;
   live: boolean; // under spring physics (thrown / scattered / released)
   launchAt: number; // forge choreography: the spring engages only after this
+  struck: boolean; // forge: this bar's impact has already fired (on contact)
   grabbed: boolean;
   /** While held: finger point + grip offset (bar frame) driving the swing. */
   grip: { target: THREE.Vector3; offset: THREE.Vector3 } | null;
@@ -234,6 +235,7 @@ function buildMonogram(): { group: THREE.Group; bars: BarSim[]; accentMesh: THRE
       angVel: new THREE.Vector3(),
       live: false,
       launchAt: -1e9,
+      struck: false,
       grabbed: false,
       grip: null,
     });
@@ -754,6 +756,7 @@ export function start(container: HTMLElement, opts: StartOpts = {}): Handle | nu
         // waits until the previous strike has landed and grown the button
         forgeQueue = bars.filter((b) => !b.accent);
         forgeQueue.forEach((b, i) => {
+          b.struck = false;
           b.launchAt = i === 0 ? now + FORGE_DELAY : Number.POSITIVE_INFINITY;
         });
       }
@@ -899,8 +902,9 @@ export function start(container: HTMLElement, opts: StartOpts = {}): Handle | nu
         }
       }
     } else {
-      // finale slow-motion eases back to real time
-      timeScale = lerp(timeScale, 1, Math.min(1, dt * 0.9));
+      // finale slow-motion eases back to real time — quickly, it's a punch
+      // of drama, not a slog (the first strike must land near real speed)
+      timeScale = lerp(timeScale, 1, Math.min(1, dt * 1.6));
       const dtSim = dt * timeScale;
       // bar physics: held bars swing on the grip; loose live bars chase home
       const buttonForge = pendingMode === 'button';
@@ -928,22 +932,28 @@ export function start(container: HTMLElement, opts: StartOpts = {}): Handle | nu
           bar.mesh.position.addScaledVector(bar.vel, dtSim);
           continue;
         }
+        // a forge strike fires on CONTACT (proximity), not on the perfect
+        // seat — the button grows the moment the bar visibly hits it
+        if (
+          buttonForge &&
+          !bar.accent &&
+          !bar.struck &&
+          bar.mesh.position.distanceTo(bar.home) < 0.16
+        ) {
+          bar.struck = true;
+          absorbed += 1;
+          impactAt = now;
+          buzz(26);
+          const accent = bars[2];
+          growFrom.copy(accent.mesh.scale);
+          growTo.lerpVectors(BTN_SCALE_FROM, BTN_SCALE_TO, absorbed / 4);
+          accent.targetScale.copy(growTo);
+          growStart = now;
+          const next = forgeQueue[absorbed];
+          if (next) next.launchAt = now + FORGE_GAP; // release the next striker
+        }
         if (stepBar(bar, dtSim)) {
           buzz(8); // clicked home
-          if (buttonForge && !bar.accent) {
-            // a forge strike: the button takes the hit and grows — a fixed
-            // 300ms overshoot tween from wherever it is to the next step
-            absorbed += 1;
-            impactAt = now;
-            buzz(26);
-            const accent = bars[2];
-            growFrom.copy(accent.mesh.scale);
-            growTo.lerpVectors(BTN_SCALE_FROM, BTN_SCALE_TO, absorbed / 4);
-            accent.targetScale.copy(growTo);
-            growStart = now;
-            const next = forgeQueue[absorbed];
-            if (next) next.launchAt = now + FORGE_GAP; // release the next striker
-          }
           const allHome = bars.every((b) => !b.live);
           if (allHome && pendingMode) {
             mode = pendingMode;

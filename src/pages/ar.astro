@@ -374,8 +374,9 @@ import { email } from '../data/site';
     cta.addEventListener('pointerenter', () => handle.setCtaHover(true));
     cta.addEventListener('pointerleave', () => handle.setCtaHover(false));
     // iOS gates gyro/motion behind a system prompt that must come from a
-    // gesture — the very first touch of the toy is that gesture
-    stage.addEventListener('pointerdown', () => void handle.enableTilt(), { once: true });
+    // gesture — the first touch RELEASE is that gesture (WebKit grants user
+    // activation on touchend/pointerup, NOT on pointerdown)
+    stage.addEventListener('pointerup', () => void handle.enableTilt(), { once: true });
     addEventListener('pagehide', () => handle.stop(), { once: true });
     // bfcache back-navigation would restore a stopped canvas — start fresh
     addEventListener('pageshow', (e) => {
