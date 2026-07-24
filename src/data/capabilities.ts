@@ -16,14 +16,14 @@ export const capabilities: Capability[] = [
   {
     title: { en: 'Leading frontend teams', cs: 'Vedení frontend týmů' },
     proof: {
-      en: 'led frontend teams on a public mobile-first self-service app — and on a utility giant’s sales digitalization',
+      en: 'led frontend teams on a public-facing mobile-first self-service app — and on a utility giant’s sales digitalization',
       cs: 'vedení FE týmů: veřejná mobile-first samoobslužná aplikace a digitalizace prodeje energetického giganta',
     },
   },
   {
     title: { en: 'Delivery in regulated industries', cs: 'Dodávka v regulovaných odvětvích' },
     proof: {
-      en: 'delivered fully online bank-account opening incl. identity verification; paperless contracting end-to-end',
+      en: 'shipped fully online bank-account opening incl. identity verification; paperless contracting end-to-end',
       cs: 'plně online založení bankovního účtu vč. ověření identity; bezpapírové zasmluvnění od A do Z',
     },
   },

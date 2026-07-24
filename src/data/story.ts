@@ -14,7 +14,7 @@ export const storySteps: StoryStep[] = [
   {
     label: { en: '01 — Architecture', cs: '01 — Architektura' },
     title: { en: 'I draw the boundary first.', cs: 'Nejdřív nakreslím hranici.' },
-    onButton: { en: 'one component, one clear job', cs: 'jedna komponenta, jedna jasná práce' },
+    onButton: { en: 'one component, one clear job', cs: 'jedna komponenta, jeden jasný úkol' },
     onPlatform: {
       en: 'one domain, one clear owner',
       cs: 'jedna doména, jeden jasný vlastník',
@@ -39,17 +39,17 @@ export const storySteps: StoryStep[] = [
     title: { en: 'Every state is a decision.', cs: 'Každý stav je rozhodnutí.' },
     onButton: {
       en: 'hover, pressed, disabled — each decided once',
-      cs: 'hover, pressed, disabled — každý rozhodnutý jednou',
+      cs: 'hover, pressed, disabled — o každém rozhodnuto jednou',
     },
     onPlatform: {
       en: 'colors, forms, patterns — each decided once, for every team',
-      cs: 'barvy, formuláře, vzory — každý rozhodnutý jednou, pro všechny týmy',
+      cs: 'barvy, formuláře, vzory — o každém rozhodnuto jednou, pro všechny týmy',
     },
     note: { en: 'fig. 03 — state: hover, 400ms ease', cs: 'obr. 03 — stav: hover, 400 ms ease' },
   },
   {
     label: { en: '04 — Accessibility', cs: '04 — Přístupnost' },
-    title: { en: 'It works for every hand.', cs: 'Funguje pro každou ruku.' },
+    title: { en: 'Keyboard, screen reader, one thumb.', cs: 'Klávesnice, čtečka, jeden palec.' },
     onButton: {
       en: 'one focus ring, one 44px target',
       cs: 'jeden focus ring, jeden 44px target',
