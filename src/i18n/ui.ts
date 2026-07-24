@@ -87,7 +87,7 @@ export const ui = {
     'story.kicker': 'Frontend architekt — Liberec',
     'story.headline': 'Tlačítko postavené stejně jako moje platformy.',
     'story.intro':
-      'Navrhuju a vedu frontend platformy pro banky a enterprise. Tady jsou základy: šest kroků, popořadě, žádný se nepřeskakuje.',
+      'Navrhuju a vedu frontend platformy pro pojišťovnictví, energetiku a automotive. Tady jsou základy: šest kroků, popořadě, žádný se nepřeskakuje.',
     'story.facts':
       'Josef Kvapil · senior frontend architekt · React & TypeScript · 10+ let · bankovnictví, pojišťovnictví, energetika · Liberec, CZ',
     'story.bridge': 'Velké věci zvládnu vést, protože jsem nikdy nepřeskočil ty malé.',
