@@ -49,7 +49,7 @@ export const storySteps: StoryStep[] = [
   },
   {
     label: { en: '04 — Accessibility', cs: '04 — Přístupnost' },
-    title: { en: 'Keyboard, screen reader, one thumb.', cs: 'Klávesnice, čtečka, jeden palec.' },
+    title: { en: 'It works without a mouse.', cs: 'Funguje i bez myši.' },
     onButton: {
       en: 'one focus ring, one 44px target',
       cs: 'jeden focus ring, jeden 44px target',
@@ -58,7 +58,7 @@ export const storySteps: StoryStep[] = [
       en: 'the same bar on every screen — WCAG 2.1 AA',
       cs: 'stejná laťka na každé obrazovce — WCAG 2.1 AA',
     },
-    note: { en: 'fig. 04 — works without a mouse', cs: 'obr. 04 — funguje bez myši' },
+    note: { en: 'fig. 04 — focus visible, 44px targets', cs: 'obr. 04 — focus viditelný, cíle 44 px' },
   },
   {
     label: { en: '05 — Review & AI leverage', cs: '05 — Review & AI' },
