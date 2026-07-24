@@ -17,6 +17,7 @@ import { email, github, linkedin } from '../data/site';
       <p class="ar__lead">Namiř foťák na zadní stranu vizitky.</p>
       <p class="ar__sub">Point your camera at the back of the card.</p>
       <button id="ar-start" class="ar__btn" type="button">Spustit kameru · Start</button>
+      <p class="ar__fine label-mono">Kamera zůstává v prohlížeči — nic se nikam neposílá.</p>
       <a href="/josef.vcf" download class="ar__link label-mono" data-ev="contact_save">
         Uložit kontakt · Save contact
       </a>
@@ -28,19 +29,26 @@ import { email, github, linkedin } from '../data/site';
       <p class="ar__sub">Načítám AR… · Loading…</p>
     </div>
 
-    <div id="ar-hint" class="ar__hint label-mono" hidden>
-      Drž vizitku v záběru · Keep the card in frame
+    <!-- scanning: shown after camera starts, until the card is found -->
+    <div id="ar-scan" class="ar__scan" hidden>
+      <div class="ar__reticle" aria-hidden="true"></div>
+      <p class="ar__scan-copy label-mono">Namiř na vizitku · dobré světlo, ~20 cm</p>
     </div>
 
-    <!-- shown once the story completes: the real choice of actions -->
+    <div id="ar-hint" class="ar__hint label-mono" hidden>
+      Drž vizitku v záběru · konec: zmáčkni tlačítko
+    </div>
+
+    <button id="ar-skip" class="ar__skip label-mono" type="button" hidden>Přeskočit →</button>
+
+    <!-- shown once the story completes: the real choice of actions (vCard-first) -->
     <div id="ar-cta" class="ar__actions" hidden>
-      <a href={`mailto:${email}`} class="ar__btn" data-ev="cta_mail">Napiš mi →</a>
-      <a href="/josef.vcf" download class="ar__btn ar__btn--ghost" data-ev="contact_save">
-        Uložit kontakt
-      </a>
+      <a href="/josef.vcf" download class="ar__btn" data-ev="contact_save">Uložit kontakt</a>
       <a href="/" class="ar__btn ar__btn--ghost" data-ev="cta_web">jkvapil.cz</a>
       <button id="ar-replay" class="ar__btn ar__btn--ghost" type="button">Znovu ↺</button>
     </div>
+
+    <div id="ar-toast" class="ar__toast label-mono" role="status" hidden>Kontakt stažen ✓</div>
 
     <!-- no camera / unsupported / in-app webview / denied: a real contact card -->
     <div id="ar-fallback" class="ar__overlay" hidden>
@@ -67,6 +75,12 @@ import { email, github, linkedin } from '../data/site';
     overscroll-behavior: none;
   }
   .ar {
+    /* Hardcode ink/paper here: the global tokens SWAP in dark theme, which
+       flipped this page to a light background (looked like a letterbox / washed
+       camera). The AR route is always ink, regardless of the visitor's theme. */
+    --ink: #121110;
+    --paper: #e8e4dc;
+    --muted: #918c84;
     position: fixed;
     inset: 0;
     width: 100vw;
@@ -92,7 +106,8 @@ import { email, github, linkedin } from '../data/site';
     justify-content: center;
     gap: 1rem;
     text-align: center;
-    padding: 2rem;
+    padding: max(2rem, env(safe-area-inset-top)) max(2rem, env(safe-area-inset-right))
+      max(2rem, env(safe-area-inset-bottom)) max(2rem, env(safe-area-inset-left));
     background: var(--ink);
   }
   .ar__kicker {
@@ -119,10 +134,13 @@ import { email, github, linkedin } from '../data/site';
     color: var(--paper);
     background: var(--accent);
     border: none;
-    padding: 0.8rem 1.3rem;
+    padding: 0.7rem 1.3rem;
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     cursor: pointer;
     text-decoration: none;
-    display: inline-block;
   }
   .ar__btn:hover {
     opacity: 0.92;
@@ -144,7 +162,7 @@ import { email, github, linkedin } from '../data/site';
   .ar__actions {
     position: absolute;
     left: 50%;
-    bottom: 1.5rem;
+    bottom: max(1.5rem, env(safe-area-inset-bottom));
     transform: translateX(-50%);
     z-index: 3;
     display: flex;
@@ -154,6 +172,15 @@ import { email, github, linkedin } from '../data/site';
     max-width: min(92vw, 30rem);
     padding: 0 1rem;
   }
+  /* scrim so ghost buttons stay legible over a bright camera feed */
+  .ar__actions:not(.ar__actions--static)::before {
+    content: '';
+    position: absolute;
+    inset: -2rem -1rem -3rem;
+    background: linear-gradient(to top, color-mix(in srgb, var(--ink) 85%, transparent), transparent);
+    z-index: -1;
+    pointer-events: none;
+  }
   .ar__actions--static {
     position: static;
     transform: none;
@@ -162,7 +189,7 @@ import { email, github, linkedin } from '../data/site';
   .ar__hint {
     position: absolute;
     left: 50%;
-    bottom: 1.5rem;
+    bottom: max(1.5rem, env(safe-area-inset-bottom));
     transform: translateX(-50%);
     z-index: 2;
     color: var(--paper);
@@ -186,21 +213,120 @@ import { email, github, linkedin } from '../data/site';
       transform: rotate(360deg);
     }
   }
+  .ar__fine {
+    color: var(--muted);
+    font-size: 0.65rem;
+    letter-spacing: 0.04em;
+    max-width: 26ch;
+    margin: 0;
+  }
+  /* scanning state: reticle + copy, over the live camera */
+  .ar__scan {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1.5rem;
+    pointer-events: none;
+  }
+  .ar__reticle {
+    width: min(62vw, 20rem);
+    aspect-ratio: 85 / 55;
+    border: 1.5px solid color-mix(in srgb, var(--paper) 70%, transparent);
+    position: relative;
+    animation: ar-breathe 1.8s ease-in-out infinite;
+  }
+  .ar__reticle::before,
+  .ar__reticle::after {
+    content: '';
+    position: absolute;
+    width: 1.4rem;
+    height: 1.4rem;
+    border: 2px solid var(--accent);
+  }
+  .ar__reticle::before {
+    top: -2px;
+    left: -2px;
+    border-right: none;
+    border-bottom: none;
+  }
+  .ar__reticle::after {
+    bottom: -2px;
+    right: -2px;
+    border-left: none;
+    border-top: none;
+  }
+  .ar__scan-copy {
+    color: var(--paper);
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    background: color-mix(in srgb, var(--ink) 70%, transparent);
+    padding: 0.5rem 0.9rem;
+  }
+  @keyframes ar-breathe {
+    0%,
+    100% {
+      opacity: 0.55;
+      transform: scale(1);
+    }
+    50% {
+      opacity: 1;
+      transform: scale(1.02);
+    }
+  }
+  .ar__skip {
+    position: absolute;
+    top: max(1rem, env(safe-area-inset-top));
+    right: max(1rem, env(safe-area-inset-right));
+    z-index: 3;
+    color: var(--paper);
+    background: color-mix(in srgb, var(--ink) 65%, transparent);
+    border: none;
+    padding: 0.5rem 0.8rem;
+    font-size: 0.72rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    cursor: pointer;
+  }
+  .ar__toast {
+    position: absolute;
+    left: 50%;
+    top: max(1.2rem, env(safe-area-inset-top));
+    transform: translateX(-50%);
+    z-index: 4;
+    background: var(--accent);
+    color: var(--paper);
+    padding: 0.5rem 0.9rem;
+    font-size: 0.72rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
   @media (prefers-reduced-motion: reduce) {
     .ar__spinner {
       animation-duration: 2s;
+    }
+    .ar__reticle {
+      animation: none;
     }
   }
 </style>
 
 <script>
-  type ARHandle = { stop: () => void; replay: () => void };
+  type ARHandle = { stop: () => void; replay: () => void; skip: () => void };
+  type AROpts = { onComplete?: () => void; onFound?: () => void; onLost?: () => void };
 
   const $ = (id: string) => document.getElementById(id)!;
   const intro = $('ar-intro');
   const loading = $('ar-loading');
+  const scan = $('ar-scan');
   const hint = $('ar-hint');
+  const skipBtn = $('ar-skip') as HTMLButtonElement;
   const cta = $('ar-cta');
+  const toast = $('ar-toast');
   const fallback = $('ar-fallback');
   const fallbackMsg = $('ar-fallback-msg');
   const startBtn = $('ar-start') as HTMLButtonElement;
@@ -212,12 +338,22 @@ import { email, github, linkedin } from '../data/site';
   // (Cloudflare Pages Function) can listen/forward later; harmless until then.
   const track = (name: string) =>
     dispatchEvent(new CustomEvent('ar:event', { detail: { name } }));
-  for (const el of document.querySelectorAll<HTMLElement>('[data-ev]')) {
-    el.addEventListener('click', () => track(el.dataset.ev!));
-  }
 
   const show = (el: HTMLElement) => (el.hidden = false);
   const hide = (el: HTMLElement) => (el.hidden = true);
+
+  let toastTimer = 0;
+  const flashToast = () => {
+    show(toast);
+    clearTimeout(toastTimer);
+    toastTimer = window.setTimeout(() => hide(toast), 2200);
+  };
+  for (const el of document.querySelectorAll<HTMLElement>('[data-ev]')) {
+    el.addEventListener('click', () => {
+      track(el.dataset.ev!);
+      if (el.dataset.ev === 'contact_save') flashToast();
+    });
+  }
 
   const isWebview = /(FBAN|FBAV|Instagram|LinkedInApp|Messenger|\bLine\/|Twitter|TikTok|Snapchat|GSA)/i.test(
     navigator.userAgent,
@@ -235,7 +371,9 @@ import { email, github, linkedin } from '../data/site';
   const showFallback = (msg: string, offerCopy = false) => {
     hide(intro);
     hide(loading);
+    hide(scan);
     hide(hint);
+    hide(skipBtn);
     hide(cta);
     fallbackMsg.textContent = msg;
     copyBtn.hidden = !offerCopy;
@@ -256,26 +394,49 @@ import { email, github, linkedin } from '../data/site';
     );
   } else {
     show(intro);
+    let done = false; // story completed at least once
     startBtn.addEventListener('click', async () => {
       startBtn.disabled = true;
       hide(intro);
       show(loading);
       track('ar_start');
       try {
-        const mod = (await import('../scripts/ar')) as { start: (c: HTMLElement, o?: object) => Promise<ARHandle> };
+        const mod = (await import('../scripts/ar')) as {
+          start: (c: HTMLElement, o?: AROpts) => Promise<ARHandle>;
+        };
         const handle = await mod.start(container, {
+          onFound: () => {
+            hide(scan);
+            if (done) return;
+            show(hint);
+            show(skipBtn);
+          },
+          onLost: () => {
+            if (done) return;
+            hide(hint);
+            hide(skipBtn);
+            (scan.querySelector('.ar__scan-copy') as HTMLElement).textContent =
+              'Ztraceno — namiř znovu · Reframe the card';
+            show(scan);
+          },
           onComplete: () => {
+            done = true;
             track('story_complete');
             hide(hint);
+            hide(skipBtn);
+            hide(scan);
             show(cta);
           },
         });
         hide(loading);
-        show(hint);
+        show(scan); // scanning until the card is found
+        skipBtn.addEventListener('click', () => handle.skip());
         replayBtn.addEventListener('click', () => {
+          done = false;
           handle.replay();
           hide(cta);
           show(hint);
+          show(skipBtn);
         });
       } catch (e) {
         const err = e as { name?: string; message?: string };
