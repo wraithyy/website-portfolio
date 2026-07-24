@@ -22,7 +22,7 @@ export const ui = {
     'story.kicker': 'Frontend architect — Liberec',
     'story.headline': 'A button, built the way I build platforms.',
     'story.intro':
-      'I architect and lead frontend platforms for insurance, energy and automotive companies. This is the foundation: six steps, in order, none skipped.',
+      'I architect and lead frontend platforms — the code other teams build on — for insurance, energy and automotive companies. This is the foundation: six steps, in order, none skipped.',
     'story.facts':
       'Josef Kvapil · senior frontend architect · React & TypeScript · 10+ years · banking, insurance, energy, automotive · Liberec, CZ',
     'story.bridge': 'Platforms are the same six steps, at scale.',
@@ -88,7 +88,7 @@ export const ui = {
     'story.kicker': 'Frontend architekt — Liberec',
     'story.headline': 'Tlačítko postavené stejně jako moje platformy.',
     'story.intro':
-      'Navrhuju a vedu frontend platformy pro pojišťovnictví, energetiku a automotive. Tady jsou základy: šest kroků, popořadě, žádný se nepřeskakuje.',
+      'Navrhuju a vedu frontend platformy — kód, na kterém staví další týmy — pro pojišťovnictví, energetiku a automotive. Tady jsou základy: šest kroků, popořadě, žádný se nepřeskakuje.',
     'story.facts':
       'Josef Kvapil · senior frontend architekt · React & TypeScript · 10+ let · bankovnictví, pojišťovnictví, energetika, automotive · Liberec, CZ',
     'story.bridge': 'Platformy jsou těch samých šest kroků, jen ve větším.',
