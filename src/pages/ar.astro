@@ -100,28 +100,28 @@ import { email } from '../data/site';
     transform: translate(-50%, -50%);
     z-index: 3;
     color: var(--ink);
-    font-size: 0.95rem;
-    letter-spacing: 0.12em;
+    font-size: clamp(1.5rem, 7.5vw, 2.6rem);
+    letter-spacing: 0.16em;
     text-transform: uppercase;
     text-decoration: none;
-    padding: 1rem 2.5rem;
+    padding: 1rem 1.5rem;
     white-space: nowrap;
   }
-  /* engraved into the button face: recessed fill, the bottom edge catches light */
+  /* debossed into the face: dark recess, the lower lip catches the light */
   .ar__cta-text {
     display: inline-block;
-    color: var(--ink);
+    color: rgba(40, 9, 3, 0.78);
     text-shadow:
-      0 1px 0 rgba(255, 255, 255, 0.28),
-      0 -1px 1px rgba(0, 0, 0, 0.45);
+      0 1px 0 rgba(255, 255, 255, 0.32),
+      0 -1px 1px rgba(0, 0, 0, 0.42);
   }
-  /* the engraver: a bright head sweeps across, letters appear in its wake */
+  /* the engraver head cuts left→right; letters appear in its wake */
   @keyframes ar-engrave-text {
     from {
-      clip-path: inset(0 100% 0 0);
+      clip-path: inset(-15% 100% -15% 0);
     }
     to {
-      clip-path: inset(0 0 0 0);
+      clip-path: inset(-15% 0% -15% 0);
     }
   }
   @keyframes ar-engrave-head {
@@ -137,87 +137,24 @@ import { email } from '../data/site';
       opacity: 0;
     }
   }
-  /* then the light comes THROUGH the cut: the letters flare up and settle
-     into a warm glow, and a halo spills off the button into the ink void */
-  @keyframes ar-light-up {
-    from {
-      color: var(--ink);
-      text-shadow:
-        0 1px 0 rgba(255, 255, 255, 0.28),
-        0 -1px 1px rgba(0, 0, 0, 0.45);
-    }
-    55% {
-      color: #fff7f0;
-      text-shadow:
-        0 0 10px rgba(255, 244, 235, 1),
-        0 0 26px rgba(255, 120, 80, 0.95),
-        0 0 70px rgba(255, 90, 60, 0.85);
-    }
-    to {
-      color: #ffede2;
-      text-shadow:
-        0 0 6px rgba(255, 238, 226, 0.95),
-        0 0 18px rgba(255, 110, 70, 0.85),
-        0 0 46px rgba(255, 90, 60, 0.55);
-    }
-  }
-  @keyframes ar-light-breathe {
-    0%,
-    100% {
-      filter: brightness(1);
-    }
-    50% {
-      filter: brightness(0.84);
-    }
-  }
-  @keyframes ar-halo-in {
-    from {
-      opacity: 0;
-    }
-    to {
-      opacity: 1;
-    }
-  }
   .ar__cta.is-stamped .ar__cta-text {
-    animation:
-      ar-engrave-text 1s linear 0.15s both,
-      ar-light-up 0.9s ease-out 1.25s both,
-      ar-light-breathe 3.6s ease-in-out 2.6s infinite;
-  }
-  .ar__cta.is-stamped::before {
-    content: '';
-    position: absolute;
-    left: 50%;
-    top: 50%;
-    width: 340%;
-    height: 500%;
-    transform: translate(-50%, -50%);
-    background: radial-gradient(
-      closest-side,
-      rgba(255, 110, 70, 0.3),
-      rgba(255, 110, 70, 0.1) 45%,
-      transparent 72%
-    );
-    pointer-events: none;
-    animation: ar-halo-in 1.4s ease-out 1.25s both;
+    animation: ar-engrave-text 1.4s linear 0.15s both;
   }
   .ar__cta.is-stamped::after {
     content: '';
     position: absolute;
-    top: 18%;
-    bottom: 18%;
+    top: 12%;
+    bottom: 12%;
     width: 2px;
     background: #e8e4dc;
-    box-shadow: 0 0 10px rgba(232, 228, 220, 0.9);
-    animation: ar-engrave-head 1s linear 0.15s both;
+    box-shadow: 0 0 12px rgba(232, 228, 220, 0.95);
+    animation: ar-engrave-head 1.4s linear 0.15s both;
   }
   @media (prefers-reduced-motion: reduce) {
     .ar__cta.is-stamped .ar__cta-text,
-    .ar__cta.is-stamped::before,
     .ar__cta.is-stamped::after {
       animation: none;
     }
-    .ar__cta.is-stamped::before,
     .ar__cta.is-stamped::after {
       content: none;
     }
