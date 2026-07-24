@@ -40,8 +40,7 @@ const GRIP_LIN_DAMP = 9; // linear damping while held (tracks without oscillatin
 const GRIP_ANG_DAMP = 1.1; // angular damping while held — low, so spins persist
 const ACCENT_MASS = 2.4; // the opinion bar is heavier to swing and to spin
 const ANGVEL_MAX = 22; // rad/s cap so a wild fling can't spin-blur the bar
-const GRAV_HELD = 5.2; // gravity on a held bar — grab an end and it hangs down
-const GRAV_FLIGHT = 2.8; // gravity on a flying bar (fades near home so it still seats)
+const HOME_PULL = 3.4; // a held bar strains toward its slot — you feel it resist
 const FINALE_AT = 10; // double-taps before the mark concedes the button
 const SCATTER_SPEED = 3.0; // double-tap explosion speed
 const TILT_GAIN = 0.4; // how far the object leans with the phone (rad at full tilt)
@@ -479,7 +478,9 @@ function gripStep(bar: BarSim, dt: number) {
   const gripPos = mesh.position.clone().add(worldOffset);
   const force = grip.target.clone().sub(gripPos).multiplyScalar(GRIP_K);
   vel.addScaledVector(force, dt / bar.mass);
-  vel.y -= GRAV_HELD * dt; // gravity acts on the centre → the far end hangs down
+  // not gravity — homesickness: the bar strains back toward its slot, so you
+  // feel it resist the grip and lean home the moment you loosen up
+  vel.addScaledVector(bar.home.clone().sub(mesh.position), (HOME_PULL * dt) / bar.mass);
   vel.multiplyScalar(Math.max(0, 1 - GRIP_LIN_DAMP * dt));
   angVel.addScaledVector(
     worldOffset.clone().cross(force),
@@ -503,8 +504,6 @@ function stepBar(bar: BarSim, dt: number): boolean {
   const acc = home.clone().sub(mesh.position).multiplyScalar(SPRING_K * bar.kMul);
   acc.addScaledVector(vel, -SPRING_DAMP * bar.dampMul);
   vel.addScaledVector(acc, dt);
-  // a thrown bar arcs downward; gravity fades near home so the seat stays exact
-  vel.y -= GRAV_FLIGHT * clamp01(mesh.position.distanceTo(home) / 0.5) * dt;
   mesh.position.addScaledVector(vel, dt);
   // torque spring toward the target orientation
   const qErr = mesh.quaternion.clone().multiply(homeQuat.clone().invert());
