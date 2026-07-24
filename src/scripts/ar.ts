@@ -21,13 +21,21 @@ const SPRING_K = 30; // bar return-spring stiffness (1/s²)
 const SPRING_DAMP = 7.0; // < critical (2·√K) → one confident overshoot, then seated
 const ROT_K = 30; // torque pulling a tumbling bar back upright
 const ROT_DAMP = 7.5;
+const ACCENT_K_MUL = 3.4; // the opinion bar: returns much faster…
+const ACCENT_DAMP_MUL = 1.7; // …and lands decisively, without the wobble
+const ACCENT_GRAB = 0.45; // and drags heavier under the finger
+const RAGE_N = 3; // this many throws…
+const RAGE_WINDOW_MS = 5000; // …within this window = the mark shakes its head
+const COLOR_LERP = 4; // per-second rate for the finale colour morph
 const BEVEL = 0.009; // chamfered edges — machined objects have chamfers, and the
 const BEVEL_T = 0.01; // rim light needs an edge to catch
 const SEAT_POS_EPS = 0.01; // "close enough" to click home
 const SEAT_VEL_EPS = 0.06;
 const GRAB_FOLLOW = 0.55; // grabbed bar → finger follow per frame (1 = rigid)
 const GRAB_RANGE = 2.4; // how far a bar can be dragged from centre (world units)
-const THROW_TUMBLE = 0.9; // how much a throw sets the bar tumbling
+const GRIP_INERTIA = 0.35; // off-centre grabs torque the bar (τ = r × −a) — feels held
+const GRIP_DAMP = 3.2; // swing damping while held (lower = loose dangle)
+const ANGVEL_MAX = 14; // rad/s cap so a wild fling can't spin-blur the bar
 const SCATTER_SPEED = 3.0; // double-tap explosion speed
 const TILT_GAIN = 0.4; // how far the object leans with the phone (rad at full tilt)
 const LIGHT_RAKE = 2.4; // how far the vermilion rim light travels with tilt (world x)
@@ -71,6 +79,8 @@ type OrientationPermissionApi = {
   requestPermission?: () => Promise<PermissionState | 'granted' | 'denied'>;
 };
 
+export type SceneMode = 'mark' | 'button';
+
 export type StartOpts = {
   reduceMotion?: boolean;
   label?: string;
@@ -78,6 +88,12 @@ export type StartOpts = {
   onSettle?: (attempts: number, allHome: boolean) => void;
   /** Double-tap blew the mark apart. */
   onScatter?: () => void;
+  /** First throw of the vermilion accent bar (the opinion). */
+  onAccentThrow?: () => void;
+  /** Rapid-fire throws — the mark just shook its head. */
+  onRage?: () => void;
+  /** The bars finished reassembling into a new shape (mark ⇄ button). */
+  onMode?: (mode: SceneMode) => void;
 };
 
 export type Handle = {
@@ -93,11 +109,22 @@ export type Handle = {
 type BarSim = {
   mesh: THREE.Mesh;
   mat: THREE.MeshStandardMaterial;
-  home: THREE.Vector3;
+  accent: boolean;
+  home: THREE.Vector3; // current target slot (mark or button formation)
+  homeQuat: THREE.Quaternion;
+  markHome: THREE.Vector3; // the monogram slot, to restore after the finale
+  baseColor: THREE.Color;
+  targetColor: THREE.Color;
+  baseEnv: number;
+  targetEnv: number;
+  kMul: number; // per-bar spring stiffness multiplier (the opinion bar is stiffer)
+  dampMul: number;
   vel: THREE.Vector3;
   angVel: THREE.Vector3;
   live: boolean; // under spring physics (thrown / scattered / released)
   grabbed: boolean;
+  /** While held: finger point + grip offset (bar frame) driving the swing. */
+  grip: { target: THREE.Vector3; offset: THREE.Vector3; prevVel: THREE.Vector3 } | null;
 };
 
 function disposeTree(root: THREE.Object3D) {
@@ -140,26 +167,40 @@ function buildMonogram(): { group: THREE.Group; bars: BarSim[]; accentMesh: THRE
   const bars: BarSim[] = [];
   let accentMesh: THREE.Mesh | null = null;
   for (const [x, y, w, h, accent] of BARS) {
-    const mat = new THREE.MeshStandardMaterial({
+    // clearcoat over matte body = lacquered ceramic, not raw CG plastic
+    const mat = new THREE.MeshPhysicalMaterial({
       color: accent ? VERMILION : CREAM,
       roughness: accent ? ACCENT_ROUGHNESS : BAR_ROUGHNESS,
       metalness: accent ? 0.15 : 0.05,
+      clearcoat: accent ? 0.9 : 0.55,
+      clearcoatRoughness: 0.28,
       // temper the room-env ceiling reflection so the accent stays vermilion at
       // rest — the moving hot streak comes from the raking rim light instead
       envMapIntensity: accent ? 0.55 : 1,
     });
     const mesh = new THREE.Mesh(barGeometry(w * s, h * s), mat);
+    mesh.castShadow = true;
     mesh.position.x = (x + w / 2 - VB_W / 2) * s;
     mesh.position.y = -(y + h / 2 - VB_H / 2) * s;
     group.add(mesh);
     bars.push({
       mesh,
       mat,
+      accent,
       home: mesh.position.clone(),
+      homeQuat: new THREE.Quaternion(),
+      markHome: mesh.position.clone(),
+      baseColor: mat.color.clone(),
+      targetColor: mat.color.clone(),
+      baseEnv: mat.envMapIntensity,
+      targetEnv: mat.envMapIntensity,
+      kMul: accent ? ACCENT_K_MUL : 1,
+      dampMul: accent ? ACCENT_DAMP_MUL : 1,
       vel: new THREE.Vector3(),
       angVel: new THREE.Vector3(),
       live: false,
       grabbed: false,
+      grip: null,
     });
     if (accent) accentMesh = mesh;
   }
@@ -167,32 +208,14 @@ function buildMonogram(): { group: THREE.Group; bars: BarSim[]; accentMesh: THRE
   return { group, bars, accentMesh };
 }
 
-/** Soft radial contact shadow on a floor plane below the mark — grounds the
-    floating object so it reads as placed, not pasted. */
-function makeContactShadow(): { mesh: THREE.Mesh; mat: THREE.MeshBasicMaterial } {
-  const px = 256;
-  const canvas = document.createElement('canvas');
-  canvas.width = px;
-  canvas.height = px;
-  const ctx = canvas.getContext('2d');
-  if (!ctx) throw new Error('2d canvas context unavailable');
-  const g = ctx.createRadialGradient(px / 2, px / 2, 0, px / 2, px / 2, px / 2);
-  g.addColorStop(0, 'rgba(0,0,0,0.55)');
-  g.addColorStop(0.55, 'rgba(0,0,0,0.18)');
-  g.addColorStop(1, 'rgba(0,0,0,0)');
-  ctx.fillStyle = g;
-  ctx.fillRect(0, 0, px, px);
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.colorSpace = THREE.SRGBColorSpace;
-  const mat = new THREE.MeshBasicMaterial({
-    map: texture,
-    transparent: true,
-    depthWrite: false,
-    opacity: 0,
-  });
-  const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1.7, 1.7), mat);
+/** Real cast shadows on an invisible floor — bars in flight throw moving
+    shadows, which is what makes them read as objects instead of CG sprites. */
+function makeShadowFloor(): { mesh: THREE.Mesh; mat: THREE.ShadowMaterial } {
+  const mat = new THREE.ShadowMaterial({ opacity: 0 });
+  const mesh = new THREE.Mesh(new THREE.PlaneGeometry(7, 7), mat);
   mesh.rotation.x = -Math.PI / 2;
   mesh.position.y = -0.95;
+  mesh.receiveShadow = true;
   return { mesh, mat };
 }
 
@@ -260,15 +283,12 @@ function createGrabControls(
   spinner: THREE.Object3D,
   monogram: THREE.Object3D,
   bars: BarSim[],
-  opts: { canGrab: () => boolean; onThrow: () => void; onDoubleTap: () => void },
+  opts: { canGrab: () => boolean; onThrow: (accent: boolean) => void; onDoubleTap: () => void },
 ): GrabControls {
   let interacted = false;
   let spinDragging = false;
   let activePointer: number | null = null; // first finger wins; others ignored
   let grabbedBar: BarSim | null = null;
-  const grabOffset = new THREE.Vector3();
-  const lastLocal = new THREE.Vector3();
-  let lastMoveAt = 0;
   let lastX = 0;
   let lastY = 0;
   let downX = 0;
@@ -332,17 +352,18 @@ function createGrabControls(
       const mesh = hits[0]?.object;
       const bar = mesh ? bars.find((b) => b.mesh === mesh) : undefined;
       if (bar) {
+        const p = localPoint(e);
+        if (!p) return;
         grabbedBar = bar;
         bar.grabbed = true;
         bar.live = true;
         bar.vel.set(0, 0, 0);
-        bar.angVel.set(0, 0, 0);
-        const p = localPoint(e);
-        if (p) {
-          grabOffset.copy(p).sub(bar.mesh.position);
-          lastLocal.copy(p);
-        }
-        lastMoveAt = performance.now();
+        // grip offset in the BAR's frame — grabbing an end makes it swing there
+        const offset = p
+          .clone()
+          .sub(bar.mesh.position)
+          .applyQuaternion(bar.mesh.quaternion.clone().invert());
+        bar.grip = { target: p.clone(), offset, prevVel: bar.vel.clone() };
         buzz(6);
         return;
       }
@@ -352,21 +373,9 @@ function createGrabControls(
 
   const onMove = (e: PointerEvent) => {
     if (e.pointerId !== activePointer) return;
-    if (grabbedBar) {
+    if (grabbedBar?.grip) {
       const p = localPoint(e);
-      if (!p) return;
-      const now = performance.now();
-      const dt = Math.max(1 / 240, (now - lastMoveAt) / 1000);
-      const target = p.clone().sub(grabOffset);
-      if (target.length() > GRAB_RANGE) target.setLength(GRAB_RANGE);
-      const before = grabbedBar.mesh.position.clone();
-      // event-rate-independent follow (120Hz pointers compose to the same feel)
-      const alpha = 1 - (1 - GRAB_FOLLOW) ** (dt * 60);
-      grabbedBar.mesh.position.lerp(target, alpha);
-      // finger velocity, half-smoothed — this becomes the throw
-      grabbedBar.vel.lerp(grabbedBar.mesh.position.clone().sub(before).divideScalar(dt), 0.5);
-      lastLocal.copy(p);
-      lastMoveAt = now;
+      if (p) grabbedBar.grip.target.copy(p); // the loop integrates the swing
       return;
     }
     if (!spinDragging) return;
@@ -390,15 +399,14 @@ function createGrabControls(
       const bar = grabbedBar;
       grabbedBar = null;
       bar.grabbed = false;
+      bar.grip = null;
       if (tap) {
         // a poke, not a throw — nudge it so it wobbles in place
         bar.vel.set(0, 0, 1.2);
         bar.angVel.set(0.6, 0.6, 0);
       } else {
-        // tumble around the axis perpendicular to the motion — deterministic,
-        // the return of a well-built thing is never random
-        bar.angVel.set(bar.vel.y, -bar.vel.x, 0).multiplyScalar(THROW_TUMBLE);
-        opts.onThrow();
+        // the swing already gave it real velocity + spin — release as-is
+        opts.onThrow(bar.accent);
       }
     }
     spinDragging = false;
@@ -439,24 +447,55 @@ function createGrabControls(
   };
 }
 
+/** One frame of a HELD bar: the centre chases (finger − rotated grip offset),
+    and the finger's inertia torques the bar around the grip — grab an end and
+    it swings like a real slat held between two fingers. */
+function gripStep(bar: BarSim, dt: number) {
+  const grip = bar.grip;
+  if (!grip) return;
+  const { mesh, vel, angVel } = bar;
+  const worldOffset = grip.offset.clone().applyQuaternion(mesh.quaternion);
+  const target = grip.target.clone().sub(worldOffset);
+  if (target.length() > GRAB_RANGE) target.setLength(GRAB_RANGE);
+  const follow = bar.accent ? GRAB_FOLLOW * ACCENT_GRAB : GRAB_FOLLOW;
+  const alpha = 1 - (1 - follow) ** (dt * 60);
+  const before = mesh.position.clone();
+  mesh.position.lerp(target, alpha);
+  const newVel = mesh.position.clone().sub(before).divideScalar(dt);
+  const accel = newVel.clone().sub(grip.prevVel).divideScalar(dt);
+  grip.prevVel.copy(newVel);
+  vel.lerp(newVel, 0.5); // half-smoothed — this becomes the throw
+  // inertial torque about the grip: the pseudo-force −a acts on the CENTRE,
+  // giving τ = (−r) × (−a) = r × a — the far end trails behind the grip
+  const torque = worldOffset.clone().cross(accel.multiplyScalar(GRIP_INERTIA));
+  angVel.addScaledVector(torque, dt);
+  angVel.multiplyScalar(Math.max(0, 1 - GRIP_DAMP * dt));
+  angVel.clampLength(0, ANGVEL_MAX);
+  const w = angVel.length();
+  if (w > 1e-5) {
+    const dq = new THREE.Quaternion().setFromAxisAngle(angVel.clone().divideScalar(w), w * dt);
+    mesh.quaternion.premultiply(dq).normalize();
+  }
+}
+
 /** Damped-spring step for one live bar; returns true the frame it seats home. */
 function stepBar(bar: BarSim, dt: number): boolean {
-  const { mesh, home, vel, angVel } = bar;
+  const { mesh, home, homeQuat, vel, angVel } = bar;
   // position spring toward home
-  const acc = home.clone().sub(mesh.position).multiplyScalar(SPRING_K);
-  acc.addScaledVector(vel, -SPRING_DAMP);
+  const acc = home.clone().sub(mesh.position).multiplyScalar(SPRING_K * bar.kMul);
+  acc.addScaledVector(vel, -SPRING_DAMP * bar.dampMul);
   vel.addScaledVector(acc, dt);
   mesh.position.addScaledVector(vel, dt);
-  // torque spring back upright
-  const q = mesh.quaternion;
-  const angle = 2 * Math.acos(THREE.MathUtils.clamp(q.w, -1, 1));
+  // torque spring toward the target orientation
+  const qErr = mesh.quaternion.clone().multiply(homeQuat.clone().invert());
+  const angle = 2 * Math.acos(THREE.MathUtils.clamp(qErr.w, -1, 1));
   if (angle > 1e-4) {
-    const s = Math.sqrt(Math.max(1e-12, 1 - q.w * q.w));
-    const axis = new THREE.Vector3(q.x / s, q.y / s, q.z / s);
+    const s = Math.sqrt(Math.max(1e-12, 1 - qErr.w * qErr.w));
+    const axis = new THREE.Vector3(qErr.x / s, qErr.y / s, qErr.z / s);
     const wrapped = angle > Math.PI ? angle - 2 * Math.PI : angle;
-    angVel.addScaledVector(axis, -wrapped * ROT_K * dt);
+    angVel.addScaledVector(axis, -wrapped * ROT_K * bar.kMul * dt);
   }
-  angVel.multiplyScalar(Math.max(0, 1 - ROT_DAMP * dt));
+  angVel.multiplyScalar(Math.max(0, 1 - ROT_DAMP * bar.dampMul * dt));
   const w = angVel.length();
   if (w > 1e-5) {
     const dq = new THREE.Quaternion().setFromAxisAngle(
@@ -473,7 +512,7 @@ function stepBar(bar: BarSim, dt: number): boolean {
     w < 0.12
   ) {
     mesh.position.copy(home);
-    mesh.quaternion.identity();
+    mesh.quaternion.copy(homeQuat);
     vel.set(0, 0, 0);
     angVel.set(0, 0, 0);
     bar.live = false;
@@ -497,6 +536,8 @@ export function start(container: HTMLElement, opts: StartOpts = {}): Handle | nu
   renderer.setClearColor(0x000000, 0);
   renderer.toneMapping = THREE.ACESFilmicToneMapping; // rolls off the hot accent face
   renderer.toneMappingExposure = 0.95;
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   const canvas = renderer.domElement;
   canvas.style.width = '100%';
   canvas.style.height = '100%';
@@ -520,8 +561,18 @@ export function start(container: HTMLElement, opts: StartOpts = {}): Handle | nu
 
   // darker ambient: the mark is carved out of the ink by the moving lights
   scene.add(new THREE.HemisphereLight(0xffffff, 0x171512, 0.5));
-  const key = new THREE.DirectionalLight(0xffffff, 0.95);
-  key.position.set(0.6, 1.0, 1.0);
+  const key = new THREE.DirectionalLight(0xffffff, 1.1);
+  key.position.set(0.9, 1.6, 1.1);
+  key.castShadow = true;
+  key.shadow.mapSize.set(1024, 1024);
+  key.shadow.camera.left = -2.2;
+  key.shadow.camera.right = 2.2;
+  key.shadow.camera.top = 2.2;
+  key.shadow.camera.bottom = -2.2;
+  key.shadow.camera.near = 0.1;
+  key.shadow.camera.far = 8;
+  key.shadow.radius = 6; // soft penumbra
+  key.shadow.bias = -0.0005;
   scene.add(key);
   // vermilion rim light — its position is driven by device tilt to rake the accent bar
   const rim = new THREE.DirectionalLight(0xff5a3c, 1.6);
@@ -537,13 +588,51 @@ export function start(container: HTMLElement, opts: StartOpts = {}): Handle | nu
   const { group: monogram, bars } = buildMonogram();
   spinner.add(monogram);
 
-  const shadow = makeContactShadow();
+  const shadow = makeShadowFloor();
   scene.add(shadow.mesh);
 
   const riseStart = reduce ? -1e9 : performance.now() + RISE_DELAY; // -inf ⇒ seated
   let riseDone = reduce;
   const riseSpan = RISE_MS + BARS.length * RISE_STAGGER;
   let attempts = 0; // throws + scatters — attempts to break it, not bars seated
+  let mode: SceneMode = 'mark';
+  let pendingMode: SceneMode | null = null;
+  let scatterHappened = false; // first double-tap reassembles the mark; later ones morph
+  let accentThrown = false;
+  let shakeAt = -1e9; // defiant head-shake timestamp (rage response)
+  const throwTimes: number[] = [];
+
+  // the finale formation: the five bars turn 90° and stack into one chunky
+  // vermilion slab — "a button, built the way I build platforms", literally.
+  // Tall bars form the face; short ones pack behind as the body.
+  const zRot = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), Math.PI / 2);
+  const BUTTON_SLOTS: { pos: THREE.Vector3; quat: THREE.Quaternion }[] = [
+    { pos: new THREE.Vector3(-0.36, 0, -0.08), quat: zRot.clone() },
+    { pos: new THREE.Vector3(0, 0.048, 0), quat: zRot.clone() },
+    { pos: new THREE.Vector3(0, -0.048, 0), quat: zRot.clone() },
+    { pos: new THREE.Vector3(0.36, 0, -0.08), quat: zRot.clone() },
+    { pos: new THREE.Vector3(0, 0, -0.14), quat: zRot.clone() },
+  ];
+  // deeper than the token — the white key/hemisphere lights lift it back up to
+  // brand vermilion on screen (targeting #ff5a3c directly renders salmon)
+  const vermilion = new THREE.Color('#d13a1e');
+
+  const setTargets = (m: SceneMode) => {
+    for (let i = 0; i < bars.length; i++) {
+      const bar = bars[i];
+      if (m === 'button') {
+        bar.home.copy(BUTTON_SLOTS[i].pos);
+        bar.homeQuat.copy(BUTTON_SLOTS[i].quat);
+        bar.targetColor.copy(vermilion);
+        bar.targetEnv = 0.3; // keep the slab saturated vermilion, not salmon
+      } else {
+        bar.home.copy(bar.markHome);
+        bar.homeQuat.identity();
+        bar.targetColor.copy(bar.baseColor);
+        bar.targetEnv = bar.baseEnv;
+      }
+    }
+  };
 
   // desktop has no gyro — the pointer position stands in for the tilt
   let mouseX = 0;
@@ -557,11 +646,10 @@ export function start(container: HTMLElement, opts: StartOpts = {}): Handle | nu
   };
   window.addEventListener('pointermove', onMouse);
 
-  const scatter = () => {
-    if (!riseDone) return;
+  const blast = () => {
     for (const bar of bars) {
       if (bar.grabbed) continue;
-      const dir = bar.home
+      const dir = bar.markHome
         .clone()
         .setZ(0)
         .normalize()
@@ -575,16 +663,41 @@ export function start(container: HTMLElement, opts: StartOpts = {}): Handle | nu
       );
       bar.live = true;
     }
+  };
+
+  const scatter = () => {
+    if (!riseDone) return;
     attempts += 1;
+    if (scatterHappened) {
+      // every later double-tap morphs the pile: mark ⇄ working button
+      pendingMode = mode === 'mark' ? 'button' : 'mark';
+      setTargets(pendingMode);
+    }
+    scatterHappened = true;
+    blast();
     buzz([18, 30, 18, 30, 28]);
     opts.onScatter?.();
   };
 
   const controls = createGrabControls(canvas, camera, spinner, monogram, bars, {
     canGrab: () => riseDone,
-    onThrow: () => {
+    onThrow: (accent) => {
       attempts += 1;
       buzz(10);
+      if (accent && !accentThrown) {
+        accentThrown = true;
+        opts.onAccentThrow?.();
+      }
+      // rapid-fire throws → the mark shakes its head at you
+      const now = performance.now();
+      throwTimes.push(now);
+      while (throwTimes.length && now - throwTimes[0] > RAGE_WINDOW_MS) throwTimes.shift();
+      if (throwTimes.length >= RAGE_N) {
+        throwTimes.length = 0;
+        shakeAt = now;
+        buzz([12, 40, 12]);
+        opts.onRage?.();
+      }
     },
     onDoubleTap: scatter,
   });
@@ -626,18 +739,33 @@ export function start(container: HTMLElement, opts: StartOpts = {}): Handle | nu
         }
       }
     } else {
-      // bar spring physics: anything live chases its home slot
+      // bar physics: held bars swing on the grip; loose live bars chase home
       for (const bar of bars) {
-        if (!bar.live || bar.grabbed) continue;
+        if (bar.grabbed) {
+          gripStep(bar, dt);
+          continue;
+        }
+        if (!bar.live) continue;
         if (stepBar(bar, dt)) {
           buzz(8); // clicked home
           const allHome = bars.every((b) => !b.live);
+          if (allHome && pendingMode) {
+            mode = pendingMode;
+            pendingMode = null;
+            opts.onMode?.(mode);
+          }
           opts.onSettle?.(attempts, allHome);
         }
       }
+      // finale colour morph: cream ⇄ vermilion while the bars are in flight
+      const cl = Math.min(1, COLOR_LERP * dt);
+      for (const bar of bars) {
+        if (!bar.mat.color.equals(bar.targetColor)) bar.mat.color.lerp(bar.targetColor, cl);
+        bar.mat.envMapIntensity = lerp(bar.mat.envMapIntensity, bar.targetEnv, cl);
+      }
     }
     const risen = clamp01((now - riseStart) / riseSpan);
-    shadow.mat.opacity = risen * 0.65;
+    shadow.mat.opacity = risen * 0.38;
     camera.position.z = lerp(DOLLY_FROM, DOLLY_TO, easeOutCubic(risen)); // slow push-in
 
     controls.applySpinInertia(dt);
@@ -660,6 +788,10 @@ export function start(container: HTMLElement, opts: StartOpts = {}): Handle | nu
     }
     pivot.rotation.y = leanY * TILT_GAIN;
     pivot.rotation.x = leanX * TILT_GAIN;
+    // defiant head-shake after rapid-fire throws — a decaying roll wiggle
+    const shakeAge = now - shakeAt;
+    pivot.rotation.z =
+      shakeAge < 900 ? Math.sin(shakeAge / 45) * 0.055 * Math.exp(-shakeAge / 260) : 0;
     rim.position.x = leanY * LIGHT_RAKE;
     rim.position.y = 0.3 + leanX * 0.8;
 
@@ -680,7 +812,6 @@ export function start(container: HTMLElement, opts: StartOpts = {}): Handle | nu
         b.mat.dispose();
       }
       shadow.mesh.geometry.dispose();
-      shadow.mat.map?.dispose();
       shadow.mat.dispose();
       envRT.dispose();
       pmrem.dispose();

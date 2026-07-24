@@ -19,7 +19,8 @@ import { email } from '../data/site';
     </header>
 
     <div class="ar__stage" id="ar-stage">
-      <button class="ar__tap label-mono" id="ar-tap" type="button" hidden></button>
+      {/* the finale: the bars reassemble into this working button (mailto) */}
+      <a class="ar__cta label-mono" id="ar-cta" href={`mailto:${email}`} data-ev="cta_mail" hidden></a>
       {/* maker's signature — fades in the first time the scattered mark reassembles */}
       <p class="ar__sig" id="ar-sig" aria-hidden="true">Josef Kvapil</p>
       <div class="ar__fallback" id="ar-fallback" hidden>
@@ -88,36 +89,21 @@ import { email } from '../data/site';
   .ar__stage :global(canvas) {
     display: block;
   }
-  .ar__tap {
+  /* the finale CTA sits exactly over the 3D slab (world origin → stage centre);
+     the slab is the visual, this anchor is the label + the click */
+  .ar__cta {
     position: absolute;
     left: 50%;
-    bottom: 12%;
-    transform: translateX(-50%);
+    top: 50%;
+    transform: translate(-50%, -50%);
     z-index: 3;
-    background: transparent;
-    border: 1px solid color-mix(in srgb, var(--paper) 30%, transparent);
-    color: var(--paper);
-    font-size: 0.72rem;
+    color: var(--ink);
+    font-size: 0.95rem;
+    letter-spacing: 0.12em;
     text-transform: uppercase;
-    letter-spacing: 0.08em;
-    padding: 0.6rem 1.1rem;
-    min-height: 44px;
-    cursor: pointer;
-    animation: ar-pulse 2.4s ease-in-out infinite;
-  }
-  @keyframes ar-pulse {
-    0%,
-    100% {
-      opacity: 0.55;
-    }
-    50% {
-      opacity: 1;
-    }
-  }
-  @media (prefers-reduced-motion: reduce) {
-    .ar__tap {
-      animation: none;
-    }
+    text-decoration: none;
+    padding: 1rem 2.5rem;
+    white-space: nowrap;
   }
   .ar__sig {
     position: absolute;
@@ -238,16 +224,16 @@ import { email } from '../data/site';
   document.documentElement.lang = lang;
 
   const stage = byId('ar-stage');
-  const tapBtn = byId('ar-tap');
   const fallback = byId('ar-fallback');
   const toast = byId('ar-toast');
+  const cta = byId('ar-cta');
 
   byId('ar-role').textContent = t['ar.role'];
   byId('ar-hint').textContent = t['ar.hint'];
   byId('ar-save').textContent = t['ar.save'];
   byId('ar-mail').textContent = t['ar.mail'];
   byId('ar-web').textContent = t['ar.web'];
-  tapBtn.textContent = t['ar.tap'];
+  cta.textContent = `${t['story.btnReal']} →`;
   toast.textContent = t['ar.toast'];
 
   // the hint line narrates the toy: throw → "it snaps back" → invite the
@@ -257,12 +243,28 @@ import { email } from '../data/site';
   const saveBtn = byId('ar-save');
   let scattered = false;
   let signed = false;
+  let sceneMode = 'mark';
   const handle = start(stage, {
     label: t['ar.alt'],
     onScatter: () => {
       scattered = true;
+      cta.hidden = true; // in flight — the label waits for the slab to seat
+    },
+    onAccentThrow: () => {
+      if (sceneMode === 'mark') hint.textContent = t['ar.hintAccent'];
+    },
+    onRage: () => {
+      hint.textContent = t['ar.hintRage'];
+    },
+    onMode: (mode) => {
+      sceneMode = mode;
+      if (mode === 'button') {
+        hint.textContent = t['ar.finale'];
+        cta.hidden = false; // the bars just became a working button
+      }
     },
     onSettle: (attempts, allHome) => {
+      if (sceneMode === 'button') return; // the finale owns the copy
       if (scattered && allHome) {
         scattered = false;
         hint.textContent = t['ar.hint4'];
@@ -291,14 +293,8 @@ import { email } from '../data/site';
     fallback.setAttribute('role', 'img');
     fallback.setAttribute('aria-label', t['ar.alt']);
   } else {
-    if (handle.needsTiltGesture) {
-      // iOS: tilt lighting needs a user gesture; the tap prompt is that gesture
-      tapBtn.hidden = false;
-      tapBtn.addEventListener('click', async () => {
-        tapBtn.hidden = true;
-        await handle.enableTilt();
-      });
-    }
+    // gyro is a free enhancement where no permission is needed (Android);
+    // on iOS we skip the permission nag — mouse/idle lean covers the light
     addEventListener('pagehide', () => handle.stop(), { once: true });
     // bfcache back-navigation would restore a stopped canvas — start fresh
     addEventListener('pageshow', (e) => {
