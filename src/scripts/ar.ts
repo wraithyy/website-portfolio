@@ -31,7 +31,6 @@ const FILTER_MIN_CF = 0.0001; // MindAR One-Euro: lower = steadier when still
 const FILTER_BETA = 1;
 const MISS_TOLERANCE = 10; // ride through brief blur without blinking out
 const WARMUP_TOLERANCE = 3;
-const SMOOTH_ROT = 0.35; // rotation EMA on the holder (lower = steadier, more lag)
 const RISE_MS = 1000; // monogram grow-in
 const BAR_STAGGER_MS = 130;
 const STEP_MS = 1100; // per story beat
@@ -321,12 +320,12 @@ export async function start(
   scene.add(fill);
 
   const anchor = mindarThree.addAnchor(0);
-  anchor.group.add(makeOccluder()); // occluder tracks the card exactly
-
-  // everything else lives in a holder we drive from the (rotation-damped) pose
-  const holder = new THREE.Group();
-  holder.visible = false;
-  scene.add(holder);
+  // Content lives directly in the anchor group — MindAR poses it and toggles its
+  // visibility. (A scene-level "smoothed holder" regressed: it desynced from the
+  // occluder and flung content off-screen. Stability now comes from the flattened
+  // low-profile geometry + MindAR's One-Euro filter, not a custom pose layer.)
+  const holder = anchor.group;
+  holder.add(makeOccluder());
 
   const ground = makeGround(0.78, 0.42);
   ground.position.z = 0.001;
@@ -420,9 +419,6 @@ export async function start(
       c.fillText(step.note.slice(0, chars), w / 2, 96);
     });
 
-  const tPos = new THREE.Vector3();
-  const tQuat = new THREE.Quaternion();
-  const tScale = new THREE.Vector3();
 
   const resetStory = () => {
     clock = 0;
@@ -460,15 +456,8 @@ export async function start(
     if (found) clock += reduceMotion ? TOTAL_MS : now - last; // reduced motion → jump to end
     last = now;
 
-    // --- drive the holder from the pose: position direct, rotation damped ---
-    holder.visible = anchor.group.visible && found;
-    if (holder.visible) {
-      anchor.group.matrix.decompose(tPos, tQuat, tScale);
-      holder.position.copy(tPos);
-      holder.scale.copy(tScale);
-      holder.quaternion.slerp(tQuat, SMOOTH_ROT);
-    }
-    if (!holder.visible) {
+    // MindAR poses & shows/hides anchor.group itself; only animate when tracked
+    if (!anchor.group.visible || !found) {
       renderer.render(scene, camera);
       return;
     }
