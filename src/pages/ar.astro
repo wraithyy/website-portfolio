@@ -1,41 +1,48 @@
 ---
+import '@fontsource/jetbrains-mono/latin-ext.css';
+import Logo from '../components/Logo.astro';
 import Base from '../layouts/Base.astro';
+import { email } from '../data/site';
 
-// Standalone utility route reached only by scanning the printed card's QR.
-// noindex — not part of the site's content. Copy is deliberately inline and
-// bilingual (CZ primary / EN subline) rather than in i18n/ui.ts: it is a tiny
-// single-purpose page, not part of the localized main-site flow.
+// The card's QR opens this page. Instead of fragile live image-tracking (or a
+// native-AR handoff that can't animate on iOS), it shows the JK monogram as an
+// interactive 3D object that rises off the "paper" and catches a vermilion light
+// as you tilt the phone. Pure WebGL — zero camera, zero install, ~100% on iOS +
+// Android. Strings resolve client-side from navigator.language. noindex; always ink.
 ---
 
 <Base lang="en" noindex>
   <main id="main-content" class="ar">
-    <div id="ar-container" class="ar__stage"></div>
+    <header class="ar__head">
+      <span class="label-mono ar__kicker">Josef Kvapil</span>
+      <span class="label-mono ar__role" id="ar-role"></span>
+    </header>
 
-    <div id="ar-intro" class="ar__overlay">
-      <span class="label-mono ar__kicker">Josef Kvapil · AR</span>
-      <p class="ar__lead">Namiř foťák na zadní stranu vizitky.</p>
-      <p class="ar__sub">Point your camera at the back of the card.</p>
-      <button id="ar-start" class="ar__btn" type="button">Spustit kameru · Start</button>
-      <a href="/josef.vcf" download class="ar__back label-mono">Uložit kontakt · Save contact</a>
-      <a href="/" class="ar__back label-mono">jkvapil.cz</a>
+    <div class="ar__stage" id="ar-stage">
+      {/* the finale: the bars reassemble into this working button (mailto) */}
+      <a class="ar__cta label-mono" id="ar-cta" href={`mailto:${email}`} data-ev="cta_mail" hidden>
+        <span class="ar__cta-text" id="ar-cta-label"></span>
+      </a>
+      {/* maker's signature — fades in the first time the scattered mark reassembles */}
+      <p class="ar__sig" id="ar-sig" aria-hidden="true">Josef Kvapil</p>
+      <div class="ar__fallback" id="ar-fallback" hidden>
+        <Logo class="ar__fallback-mark" />
+      </div>
     </div>
 
-    <a href="/josef.vcf" download class="ar__save label-mono">Uložit kontakt</a>
+    <p class="ar__hint label-mono" id="ar-hint"></p>
 
-    <div id="ar-hint" class="ar__hint label-mono" hidden>
-      Drž vizitku v záběru — na konci zmáčkni tlačítko
+    <div class="ar__actions">
+      <a href="/josef.vcf" download class="ar__btn" id="ar-save" data-ev="contact_save"></a>
+      <a href={`mailto:${email}`} class="ar__btn ar__btn--ghost" id="ar-mail" data-ev="cta_mail"></a>
+      <a href="/" class="ar__btn ar__btn--ghost" id="ar-web" data-ev="cta_web"></a>
     </div>
 
-    <div id="ar-error" class="ar__overlay" hidden>
-      <p class="ar__lead">Kameru se nepodařilo spustit.</p>
-      <p id="ar-error-msg" class="ar__sub"></p>
-      <a href="/" class="ar__btn">Zpět na web · Back</a>
-    </div>
+    <div id="ar-toast" class="ar__toast label-mono" role="status" hidden></div>
   </main>
 </Base>
 
 <style>
-  /* full-screen AR route — no page scroll */
   :global(html),
   :global(body) {
     margin: 0;
@@ -43,130 +50,363 @@ import Base from '../layouts/Base.astro';
     overscroll-behavior: none;
   }
   .ar {
+    /* always ink — global tokens flip in dark theme */
+    --ink: #121110;
+    --paper: #e8e4dc;
+    --muted: #918c84;
+    --accent: #ff5a3c;
     position: fixed;
     inset: 0;
     width: 100vw;
-    height: 100vh; /* fallback */
-    height: 100dvh; /* dynamic viewport — full height on mobile Safari */
+    height: 100vh;
+    height: 100dvh;
     background: var(--ink);
     color: var(--paper);
-    overflow: hidden;
-  }
-  .ar__stage {
-    position: absolute;
-    inset: 0;
-    overflow: hidden;
-  }
-  /* mind-ar sizes & centres the video/canvas itself (inline px width + negative
-     top/left to cover). Don't override those or it shifts off-centre — just clip
-     any overflow above and lock the page from scrolling. */
-  .ar__overlay {
-    position: absolute;
-    inset: 0;
-    z-index: 2;
     display: flex;
     flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 1rem;
-    text-align: center;
-    padding: 2rem;
-    background: var(--ink);
+    padding: max(1.25rem, env(safe-area-inset-top)) max(1.25rem, env(safe-area-inset-right))
+      max(1.25rem, env(safe-area-inset-bottom)) max(1.25rem, env(safe-area-inset-left));
+    box-sizing: border-box;
+  }
+  .ar__head {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
   }
   .ar__kicker {
     color: var(--accent);
+    font-size: 0.8rem;
   }
-  .ar__lead {
-    font-family: var(--font-display, 'Instrument Serif', serif);
-    font-size: clamp(1.75rem, 6vw, 2.75rem);
-    line-height: 1.05;
-    margin: 0;
-    max-width: 18ch;
-  }
-  .ar__sub {
+  .ar__role {
     color: var(--muted);
+    font-size: 0.7rem;
+  }
+  .ar__stage {
+    position: relative;
+    flex: 1;
+    min-height: 0;
+    width: 100%;
+    touch-action: none;
+  }
+  .ar__stage :global(canvas) {
+    display: block;
+  }
+  /* the finale CTA sits exactly over the 3D slab (world origin → stage centre);
+     the slab is the visual, this anchor is the label + the click */
+  .ar__cta {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 3;
+    color: var(--ink);
+    font-size: clamp(1.5rem, 7.5vw, 2.6rem);
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    text-decoration: none;
+    padding: 1rem 1.5rem;
+    white-space: nowrap;
+  }
+  /* debossed into the face: dark recess, the lower lip catches the light */
+  .ar__cta-text {
+    display: inline-block;
+    color: rgba(40, 9, 3, 0.78);
+    text-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.32),
+      0 -1px 1px rgba(0, 0, 0, 0.42);
+    transition:
+      color 0.25s ease,
+      text-shadow 0.25s ease;
+  }
+  /* hover: the 3D face lifts (driven in the scene); the cut deepens with it */
+  .ar__cta:hover .ar__cta-text {
+    color: rgba(28, 6, 2, 0.88);
+    text-shadow:
+      0 2px 0 rgba(255, 255, 255, 0.38),
+      0 -2px 2px rgba(0, 0, 0, 0.5);
+  }
+  .ar__cta:hover {
+    cursor: pointer;
+  }
+  /* the engraver head cuts left→right; letters appear in its wake */
+  @keyframes ar-engrave-text {
+    from {
+      clip-path: inset(-15% 100% -15% 0);
+    }
+    to {
+      clip-path: inset(-15% 0% -15% 0);
+    }
+  }
+  @keyframes ar-engrave-head {
+    from {
+      left: 0;
+      opacity: 1;
+    }
+    85% {
+      opacity: 1;
+    }
+    to {
+      left: 100%;
+      opacity: 0;
+    }
+  }
+  .ar__cta.is-stamped .ar__cta-text {
+    animation: ar-engrave-text 1.4s linear 0.15s both;
+  }
+  .ar__cta.is-stamped::after {
+    content: '';
+    position: absolute;
+    top: 12%;
+    bottom: 12%;
+    width: 2px;
+    background: #e8e4dc;
+    box-shadow: 0 0 12px rgba(232, 228, 220, 0.95);
+    animation: ar-engrave-head 1.4s linear 0.15s both;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .ar__cta.is-stamped .ar__cta-text,
+    .ar__cta.is-stamped::after {
+      animation: none;
+    }
+    .ar__cta.is-stamped::after {
+      content: none;
+    }
+  }
+  .ar__sig {
+    position: absolute;
+    left: 50%;
+    bottom: 4%;
+    transform: translateX(-50%);
     margin: 0;
-    font-size: 0.95rem;
+    font-family: 'Instrument Serif', Georgia, serif;
+    font-style: italic;
+    font-size: 1.35rem;
+    color: var(--paper);
+    opacity: 0;
+    transition: opacity 1.4s ease;
+    pointer-events: none;
+  }
+  .ar__sig.is-signed {
+    opacity: 0.85;
+  }
+  .ar__fallback {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .ar__fallback-mark {
+    width: 40%;
+    max-width: 9rem;
+    height: auto;
+    color: var(--paper);
+  }
+  /* left-aligned with the lockup — one Swiss column, the action row is the
+     sole centered exception */
+  .ar__hint {
+    text-align: left;
+    color: var(--muted);
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin: 0 0 0.9rem;
+  }
+  .ar__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    justify-content: center;
   }
   .ar__btn {
-    margin-top: 0.5rem;
     font-family: var(--font-mono, 'JetBrains Mono', monospace);
     font-size: 0.8125rem;
     letter-spacing: 0.08em;
     text-transform: uppercase;
-    color: var(--paper);
+    color: var(--ink);
     background: var(--accent);
     border: none;
-    padding: 0.85rem 1.4rem;
+    padding: 0.7rem 1.3rem;
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     cursor: pointer;
     text-decoration: none;
   }
   .ar__btn:hover {
     opacity: 0.92;
   }
-  .ar__back {
-    color: var(--muted);
-    text-decoration: none;
-    margin-top: 0.5rem;
+  @keyframes ar-nudge {
+    0%,
+    100% {
+      transform: translateY(0);
+    }
+    35% {
+      transform: translateY(-3px);
+    }
   }
-  .ar__save {
-    position: absolute;
-    top: 1rem;
-    right: 1rem;
-    z-index: 3;
+  .ar__btn.is-nudged {
+    animation: ar-nudge 0.6s ease;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .ar__btn.is-nudged {
+      animation: none;
+    }
+  }
+  .ar__btn--ghost {
+    background: transparent;
     color: var(--paper);
-    background: color-mix(in srgb, var(--ink) 70%, transparent);
-    padding: 0.5rem 0.8rem;
-    font-size: 0.7rem;
-    text-decoration: none;
+    /* 60% so the outline clears the 3:1 WCAG UI-component contrast floor */
+    border: 1px solid color-mix(in srgb, var(--paper) 60%, transparent);
   }
-  .ar__hint {
+  .ar__toast {
     position: absolute;
     left: 50%;
-    bottom: 1.5rem;
+    top: max(1.2rem, env(safe-area-inset-top));
     transform: translateX(-50%);
-    z-index: 2;
-    color: var(--paper);
-    background: color-mix(in srgb, var(--ink) 70%, transparent);
+    z-index: 4;
+    background: var(--accent);
+    color: var(--ink);
     padding: 0.5rem 0.9rem;
-    font-size: 0.7rem;
+    font-size: 0.72rem;
     letter-spacing: 0.08em;
     text-transform: uppercase;
-    pointer-events: none;
   }
 </style>
 
 <script>
-  const intro = document.getElementById('ar-intro')!;
-  const hint = document.getElementById('ar-hint')!;
-  const errorBox = document.getElementById('ar-error')!;
-  const errorMsg = document.getElementById('ar-error-msg')!;
-  const startBtn = document.getElementById('ar-start') as HTMLButtonElement;
-  const container = document.getElementById('ar-container')!;
+  import { email } from '../data/site';
+  import { ui, type Lang } from '../i18n/ui';
+  import { start } from '../scripts/ar';
 
-  const fail = (msg: string) => {
-    intro.hidden = true;
-    hint.hidden = true;
-    errorBox.hidden = false;
-    errorMsg.textContent = msg;
+  const byId = (id: string) => {
+    const el = document.getElementById(id);
+    if (!el) throw new Error(`#${id} missing`);
+    return el;
   };
 
-  startBtn.addEventListener('click', async () => {
-    startBtn.disabled = true;
-    startBtn.textContent = 'Spouštím… · Loading…';
-    try {
-      const { start } = await import('../scripts/ar');
-      await start(container);
-      intro.hidden = true;
-      hint.hidden = false;
-    } catch (e) {
-      const err = e as { name?: string; message?: string };
-      const denied = err?.name === 'NotAllowedError';
-      fail(
-        denied
-          ? 'Přístup ke kameře byl odepřen. Povol kameru v prohlížeči a zkus to znovu.'
-          : err?.message || 'Zkus to prosím v jiném prohlížeči (Safari / Chrome).',
-      );
-    }
+  const lang: Lang = navigator.language?.toLowerCase().startsWith('cs') ? 'cs' : 'en';
+  const t = ui[lang];
+  document.documentElement.lang = lang;
+
+  const stage = byId('ar-stage');
+  const fallback = byId('ar-fallback');
+  const toast = byId('ar-toast');
+  const cta = byId('ar-cta');
+
+  byId('ar-role').textContent = t['ar.role'];
+  byId('ar-hint').textContent = t['ar.hint'];
+  byId('ar-save').textContent = t['ar.save'];
+  byId('ar-mail').textContent = t['ar.mail'];
+  byId('ar-web').textContent = t['ar.web'];
+  byId('ar-cta-label').textContent = `${t['story.btnReal']} →`;
+  toast.textContent = t['ar.toast'];
+
+  // the hint line narrates the toy: throw → "it snaps back" → invite the
+  // double-tap → after the full scatter reassembles, the punchline + signature
+  const hint = byId('ar-hint');
+  const sig = byId('ar-sig');
+  const saveBtn = byId('ar-save');
+  let scattered = false;
+  let signed = false;
+  let sceneMode = 'mark';
+  let scatters = 0;
+  const handle = start(stage, {
+    label: t['ar.alt'],
+    onScatter: (count) => {
+      scattered = true;
+      scatters = count;
+      cta.hidden = true; // in flight — the label waits for the slab to seat
+    },
+    onAccentThrow: () => {
+      if (sceneMode === 'mark') hint.textContent = t['ar.hintAccent'];
+    },
+    onRage: () => {
+      hint.textContent = t['ar.hintRage'];
+    },
+    onMode: (mode) => {
+      sceneMode = mode;
+      if (mode === 'button') {
+        hint.textContent = t['ar.finale'];
+        cta.hidden = false; // the bars just became a working button
+        cta.classList.remove('is-stamped');
+        requestAnimationFrame(() => cta.classList.add('is-stamped'));
+      }
+    },
+    onSettle: (attempts, allHome) => {
+      if (sceneMode === 'button') return; // the finale owns the copy
+      if (scattered && allHome) {
+        scattered = false;
+        // count up toward the finale — telegraphs there's a payoff at ten
+        hint.textContent =
+          scatters > 1
+            ? t['ar.standing'].replace('{n}', String(Math.min(scatters, 9)))
+            : t['ar.hint4'];
+        saveBtn.classList.remove('is-nudged');
+        requestAnimationFrame(() => saveBtn.classList.add('is-nudged'));
+        if (!signed) {
+          signed = true;
+          sig.classList.add('is-signed'); // the maker signs the reassembled mark
+          console.log(
+            `%c${attempts} attempt${attempts === 1 ? '' : 's'} to break it. Still standing.\nI build software the same way. → ${email}`,
+            'font-family:ui-monospace,monospace;color:#ff5a3c',
+          );
+        }
+      } else if (attempts >= 5) {
+        hint.textContent = t['ar.hintN'].replace('{n}', String(attempts));
+      } else if (attempts >= 2) {
+        hint.textContent = t['ar.hint3'];
+      } else {
+        hint.textContent = t['ar.hint2'];
+      }
+    },
   });
+  if (!handle) {
+    // no WebGL — show the static mark, keep the working contact buttons
+    fallback.hidden = false;
+    fallback.setAttribute('role', 'img');
+    fallback.setAttribute('aria-label', t['ar.alt']);
+  } else {
+    // gyro is a free enhancement where no permission is needed (Android);
+    // on iOS we skip the permission nag — mouse/idle lean covers the light
+    // hovering the label lifts the 3D button face under it
+    cta.addEventListener('pointerenter', () => handle.setCtaHover(true));
+    cta.addEventListener('pointerleave', () => handle.setCtaHover(false));
+    // iOS gates gyro/motion behind a system prompt that must come from real
+    // user activation — WebKit grants it on touchend/click. Keep asking on
+    // each tap until it's granted (or clearly refused a few times), because
+    // a single silent failure would kill gyro for the whole visit.
+    let motionTries = 0;
+    const askMotion = () => {
+      void handle.enableTilt().then((ok) => {
+        if (ok || ++motionTries >= 4) {
+          stage.removeEventListener('click', askMotion);
+          stage.removeEventListener('touchend', askMotion);
+        }
+      });
+    };
+    stage.addEventListener('click', askMotion);
+    stage.addEventListener('touchend', askMotion);
+    addEventListener('pagehide', () => handle.stop(), { once: true });
+    // bfcache back-navigation would restore a stopped canvas — start fresh
+    addEventListener('pageshow', (e) => {
+      if (e.persisted) location.reload();
+    });
+  }
+
+  // analytics + save-contact toast (unchanged event hooks)
+  const track = (name: string) =>
+    dispatchEvent(new CustomEvent('ar:event', { detail: { name } }));
+  let toastTimer = 0;
+  for (const el of document.querySelectorAll<HTMLElement>('[data-ev]')) {
+    el.addEventListener('click', () => {
+      track(el.dataset.ev ?? '');
+      if (el.dataset.ev === 'contact_save') {
+        toast.hidden = false;
+        clearTimeout(toastTimer);
+        toastTimer = window.setTimeout(() => (toast.hidden = true), 2200);
+      }
+    });
+  }
 </script>

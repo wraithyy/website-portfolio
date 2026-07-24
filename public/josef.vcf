@@ -3,7 +3,10 @@ VERSION:3.0
 FN:Josef Kvapil
 N:Kvapil;Josef;;;
 TITLE:Frontend architekt
+ORG:Trask
 EMAIL;TYPE=INTERNET:josef0kvapil@gmail.com
 URL:https://jkvapil.cz
+X-SOCIALPROFILE;TYPE=linkedin:https://www.linkedin.com/in/josef-kvapil
+X-SOCIALPROFILE;TYPE=github:https://github.com/wraithyy
 ADR;TYPE=WORK:;;;Liberec;;;Czechia
 END:VCARD

@@ -1,44 +1,83 @@
-/* WebAR business-card experience.
-   Point the camera at the back of the printed card (compiled into
-   public/ar/card.mind) and a story emerges FROM the card: the JK monogram
-   rises up through the paper surface, then — mirroring the site's StoryHero —
-   an angular button is assembled from flying blocks and lifts out of a recessed
-   socket, ending as a tappable "Napiš mi →" that presses back into the hole.
+/* "It snaps back" — the JK monogram as a physical toy you cannot break.
 
-   Architecture notes (learned the hard way):
-   - Content lives INSIDE anchor.group — MindAR owns the pose (its One-Euro
-     filter is well tuned) and auto-hides the group when the card leaves frame.
-     No hand-rolled smoothing layer fighting it.
-   - A depth-only occluder plane on the card surface hides whatever is "below"
-     it, so objects rising from under z=0 genuinely appear to come out of the card.
-   Loaded lazily from ar.astro, mirroring the Konami egg. */
+   The card's QR opens /ar. The printed mark rises off the paper into five solid
+   machined bars. Grab any bar and throw it — it springs back into its slot with
+   a wobble and a haptic click. Double-tap scatters all five; the mark reassembles
+   itself. Drag empty space to spin the whole mark (with inertia); tilt the phone
+   (or move the mouse) to rake a vermilion light across it. Pure three.js — no
+   camera, no WebXR, no physics engine: art-directed springs. Loaded lazily from
+   ar.astro. */
 import * as THREE from 'three';
-// mind-ar treats `three` as a peer dep, so this shares the app's single THREE instance
-import { MindARThree } from 'mind-ar/dist/mindar-image-three.prod.js';
-import { email } from '../data/site';
+import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
+import { clamp01, easeOutBack, easeOutCubic, isTap, lerp } from './ar-math';
 
 const CREAM = '#e8e4dc';
 const VERMILION = '#ff5a3c';
-const INK = '#121110';
-const SOCKET = '#050504';
 
-// --- tuning knobs (safe to tweak on-device) ---------------------------------
-// MindAR One-Euro pose filter. Lower minCF = steadier when still; lower beta =
-// smoother during motion (more lag). These are the real anti-jitter controls now.
-const FILTER_MIN_CF = 0.0001;
-const FILTER_BETA = 2;
-const MISS_TOLERANCE = 5;
-const WARMUP_TOLERANCE = 3;
-// timings run at ~80% speed (slowed from the first cut)
-const RISE_MS = 1375; // monogram grow-in (bars staggered within)
-const BAR_STAGGER_MS = 165;
-const STEP_MS = 1750; // per story beat
-const TYPE_MS = 53; // typewriter speed per character
-const HOVER_AMP = 0.008;
-const HOVER_HZ = 0.3;
+// --- calibration knobs (tune on-device; the "wow" lives here, not in the code) ---
+const DRAG_SENS = 0.006; // pointer px → radians of whole-mark spin
+const FRICTION = 0.94; // post-release spin decay per frame (higher = longer coast)
+const SPRING_K = 30; // bar return-spring stiffness (1/s²)
+const SPRING_DAMP = 7.0; // < critical (2·√K) → one confident overshoot, then seated
+const ROT_K = 30; // torque pulling a tumbling bar back upright
+const ROT_DAMP = 7.5;
+const ACCENT_K_MUL = 3.4; // the opinion bar: returns much faster…
+const ACCENT_DAMP_MUL = 1.7; // …and lands decisively, without the wobble
+const RAGE_N = 3; // this many throws…
+const RAGE_WINDOW_MS = 5000; // …within this window = the mark shakes its head
+const COLOR_LERP = 4; // per-second rate for the finale colour morph
+// the forge: after the finale blast, the cream bars strike the button one by
+// one from behind — each impact kicks the camera, spikes the light and grows
+// the button a step. The capabilities literally forge the button.
+const FORGE_DELAY = 1000; // ms of scattered suspense before the first strike
+const FORGE_GAP = 260; // ms after a strike lands before the next bar launches
+const FORGE_KICK = 0.09; // camera punch-in per impact (world units)
+const FORGE_SPIKE = 2.4; // rim-light surge per impact
+const GROW_MS = 300; // per-strike button growth tween (easeOutBack, fixed length)
+const TILT_GRAV = 1.7; // phone tilt (or mouse) = gravity for loose bars — they slide
+const SHAKE_THRESHOLD = 14; // m/s² of device shake that triggers a scatter
+const SHAKE_DEBOUNCE_MS = 1600;
+const FAN_SHIFT = 0.06; // tilt fans the seated bars apart in depth (parallax)
+const FAN_ROT = 0.09; // and turns each face slightly into the light (rad)
+const HOVER_LIFT = 0.12; // hovered button face rises toward the viewer
+const HOVER_GLOW = 0.9; // extra rim light while hovered
+const BEVEL = 0.009; // chamfered edges — machined objects have chamfers, and the
+const BEVEL_T = 0.01; // rim light needs an edge to catch
+const SEAT_POS_EPS = 0.01; // "close enough" to click home
+const SEAT_VEL_EPS = 0.06;
+const GRAB_RANGE = 2.4; // how far a bar can be dragged from centre (world units)
+// held-bar rigid body: a stiff spring pins the GRIP POINT to the finger; the
+// constraint force also torques the bar (τ = r × F), so off-centre grabs swing
+// and circular finger motion genuinely spins it up — short bars spin faster
+// (smaller moment of inertia), the real thing
+const GRIP_K = 140; // grip-to-finger spring stiffness (1/s²)
+const GRIP_LIN_DAMP = 9; // linear damping while held (tracks without oscillating)
+const GRIP_ANG_DAMP = 1.1; // angular damping while held — low, so spins persist
+const ACCENT_MASS = 2.4; // the opinion bar is heavier to swing and to spin
+const ANGVEL_MAX = 22; // rad/s cap so a wild fling can't spin-blur the bar
+const HOME_PULL = 3.4; // a held bar strains toward its slot — you feel it resist
+const FINALE_AT = 10; // double-taps before the mark concedes the button
+const SCATTER_SPEED = 3.0; // double-tap explosion speed
+const TILT_GAIN = 0.4; // how far the object leans with the phone (rad at full tilt)
+const LIGHT_RAKE = 2.4; // how far the vermilion rim light travels with tilt (world x)
+const TILT_EMA = 0.12; // tilt low-pass (lower = smoother, reads as heft not jitter)
+const BAR_ROUGHNESS = 0.55; // cream bars: matte-machined
+const ACCENT_ROUGHNESS = 0.34; // accent spine: sharper specular so the light "catches"
+const BAR_DEPTH = 0.2; // extrusion depth — deep enough to read as a machined solid
+const RISE_MS = 1400; // per-bar rise/thicken duration
+const RISE_STAGGER = 140; // ms between successive bars seating
+const RISE_DELAY = 550; // ms of "flat / printed" before the rise fires
+const DOLLY_FROM = 4.3; // camera z at load…
+const DOLLY_TO = 3.3; // …dollying in as the mark rises
+const IDLE_AMP = 0.32; // slow auto-lean amplitude when idle & no gyro (rad ratio)
+const IDLE_HZ = 0.07; // auto-lean frequency
+const MOUSE_GAIN = 0.9; // desktop: pointer position drives the lean (no gyro there)
+const TAP_MOVE_PX = 8; // pointer travel under which an up counts as a tap, not a drag
+const TAP_MS = 350; // and under this duration
+const DOUBLE_TAP_MS = 320; // two taps within this = scatter
 
-// --- JK monogram bars, straight from the logo SVG (viewBox 0 0 132 168) ---
-const BARS: [number, number, number, number, boolean][] = [
+// JK monogram bars, from the logo SVG (viewBox 0 0 132 168); 3rd bar is the accent.
+const BARS: readonly [number, number, number, number, boolean][] = [
   [0, 89, 25, 79, false],
   [36, 0, 25, 168, false],
   [71, 0, 25, 168, true],
@@ -47,471 +86,946 @@ const BARS: [number, number, number, number, boolean][] = [
 ];
 const VB_W = 132;
 const VB_H = 168;
-const MONO_WIDTH = 0.24;
-const MONO_DEPTH = 0.11; // tall enough that rising out of the card reads clearly
-const MONO_Y = 0.13;
+const MONO_WIDTH = 1.12; // world units — the mark is the hero, it fills the frame
+const IDENTITY_Q = new THREE.Quaternion();
 
-// --- story beats (condensed from src/data/story.ts, CS to match the card) ---
-const STEPS = [
-  { label: '01 — Architektura', note: 'nejdřív nakreslím hranici' },
-  { label: '02 — TypeScript', note: 'otypuju, jak komunikuje' },
-  { label: '03 — Design systémy', note: 'každý stav rozhodnutý jednou' },
-  { label: '04 — Přístupnost', note: 'funguje pro každou ruku' },
-  { label: '05 — Review & AI', note: 'renders ✓ klávesnice ✓ kontrast ✓' },
-  { label: '06 — Dodávka', note: 'nasazeno. zmáčkni tlačítko.' },
-];
-const CTA_LABEL = 'Napiš mi →';
-
-const BTN_W = 0.34;
-const BTN_H = 0.12;
-const BTN_DEPTH = 0.06;
-const BTN_Y = -0.11;
-const BTN_LIFT = 0.08; // hover height above the socket when built
-const SOCKET_M = 0.05;
-
-const BLOCK_COUNT = 6;
-const SPARK_COUNT = 46;
-const AMBIENT_COUNT = 55;
-const BURST_MS = 900;
-const BURST_EVERY_MS = 2600;
-
-type Handle = { stop: () => void };
-type Ctx2D = CanvasRenderingContext2D;
-
-function fitFont(ctx: Ctx2D, text: string, family: string, maxW: number, startPx: number) {
-  let px = startPx;
-  ctx.font = `${px}px ${family}`;
-  while (ctx.measureText(text).width > maxW && px > 10) {
-    px -= 3;
-    ctx.font = `${px}px ${family}`;
+const buzz = (pattern: number | number[]) => {
+  try {
+    navigator.vibrate?.(pattern);
+  } catch {
+    /* haptics unsupported (iOS) — silently ignored */
   }
-  return px;
+};
+
+type OrientationPermissionApi = {
+  requestPermission?: () => Promise<PermissionState | 'granted' | 'denied'>;
+};
+
+export type SceneMode = 'mark' | 'button';
+
+export type StartOpts = {
+  reduceMotion?: boolean;
+  label?: string;
+  /** A thrown/scattered bar just clicked home. `attempts` = throws + scatters. */
+  onSettle?: (attempts: number, allHome: boolean) => void;
+  /** Double-tap blew the mark apart; `count` = how many double-taps so far. */
+  onScatter?: (count: number) => void;
+  /** First throw of the vermilion accent bar (the opinion). */
+  onAccentThrow?: () => void;
+  /** Rapid-fire throws — the mark just shook its head. */
+  onRage?: () => void;
+  /** The bars finished reassembling into a new shape (mark ⇄ button). */
+  onMode?: (mode: SceneMode) => void;
+};
+
+export type Handle = {
+  /** Enable device-tilt lighting. On iOS this must run inside a user gesture
+      (it triggers the permission prompt); elsewhere it just attaches the listener. */
+  enableTilt: () => Promise<boolean>;
+  /** Whether tilt needs a user gesture first (iOS 13+). */
+  needsTiltGesture: boolean;
+  /** Hovering the CTA label lifts the 3D button face and brightens the light. */
+  setCtaHover: (hover: boolean) => void;
+  /** Tear down: stop the loop, dispose GPU resources, remove listeners. */
+  stop: () => void;
+};
+
+type BarSim = {
+  mesh: THREE.Mesh;
+  mat: THREE.MeshStandardMaterial;
+  accent: boolean;
+  home: THREE.Vector3; // current target slot (mark or button formation)
+  homeQuat: THREE.Quaternion;
+  markHome: THREE.Vector3; // the monogram slot, to restore after the finale
+  baseColor: THREE.Color;
+  targetColor: THREE.Color;
+  baseEnv: number;
+  targetEnv: number;
+  targetScale: THREE.Vector3; // button formation stretches the short bars
+  kMul: number; // per-bar spring stiffness multiplier (the opinion bar is stiffer)
+  dampMul: number;
+  mass: number;
+  invI: number; // inverse moment of inertia — short bars spin up faster
+  vel: THREE.Vector3;
+  angVel: THREE.Vector3;
+  live: boolean; // under spring physics (thrown / scattered / released)
+  launchAt: number; // forge choreography: the spring engages only after this
+  struck: boolean; // forge: this bar's impact has already fired (on contact)
+  grabbed: boolean;
+  /** While held: finger point + grip offset (bar frame) driving the swing. */
+  grip: { target: THREE.Vector3; offset: THREE.Vector3 } | null;
+};
+
+function disposeTree(root: THREE.Object3D) {
+  root.traverse((node) => {
+    if (!(node instanceof THREE.Mesh)) return;
+    node.geometry.dispose();
+    const mat = node.material;
+    if (Array.isArray(mat)) mat.forEach((m) => m.dispose());
+    else mat.dispose();
+  });
 }
 
-function rectOutline(w: number, h: number, color: string) {
-  const line = new THREE.LineSegments(
-    new THREE.EdgesGeometry(new THREE.PlaneGeometry(w, h)),
-    new THREE.LineBasicMaterial({ color }),
-  );
-  return line;
+/** A bar as a chamfered slab (ExtrudeGeometry): outer footprint w×h×BAR_DEPTH,
+    centered on the origin, with a small 45° bevel that gives the rim light an
+    edge to catch — raw boxes read as plastic. */
+function barGeometry(w: number, h: number): THREE.ExtrudeGeometry {
+  const iw = w / 2 - BEVEL;
+  const ih = h / 2 - BEVEL;
+  const shape = new THREE.Shape();
+  shape.moveTo(-iw, -ih);
+  shape.lineTo(iw, -ih);
+  shape.lineTo(iw, ih);
+  shape.lineTo(-iw, ih);
+  shape.closePath();
+  const depth = BAR_DEPTH - 2 * BEVEL_T;
+  const geo = new THREE.ExtrudeGeometry(shape, {
+    depth,
+    bevelEnabled: true,
+    bevelSize: BEVEL,
+    bevelThickness: BEVEL_T,
+    bevelSegments: 2,
+  });
+  geo.translate(0, 0, -depth / 2);
+  return geo;
 }
 
-/** Invisible depth-only plane on the card surface — anything behind it (below
-    the paper) is culled, so risen content appears to emerge from the card. */
-function makeOccluder() {
-  const mesh = new THREE.Mesh(
-    new THREE.PlaneGeometry(1.6, 1.1),
-    new THREE.MeshBasicMaterial({ colorWrite: false }),
-  );
-  mesh.position.z = -0.001;
-  mesh.renderOrder = -1;
-  return mesh;
-}
-
-function buildMonogram() {
+function buildMonogram(): { group: THREE.Group; bars: BarSim[]; accentMesh: THREE.Mesh } {
   const group = new THREE.Group();
   const s = MONO_WIDTH / VB_W;
-  const bars: THREE.Mesh[] = [];
-  const barMats: THREE.MeshStandardMaterial[] = [];
-  for (const [x, y, w, h, isAccent] of BARS) {
-    const mat = new THREE.MeshStandardMaterial({
-      color: isAccent ? VERMILION : CREAM,
-      roughness: 0.4,
-      metalness: 0.05,
-      emissive: isAccent ? VERMILION : CREAM,
-      emissiveIntensity: 0,
+  const bars: BarSim[] = [];
+  let accentMesh: THREE.Mesh | null = null;
+  for (const [x, y, w, h, accent] of BARS) {
+    // clearcoat over matte body = lacquered ceramic, not raw CG plastic
+    const mat = new THREE.MeshPhysicalMaterial({
+      color: accent ? VERMILION : CREAM,
+      roughness: accent ? ACCENT_ROUGHNESS : BAR_ROUGHNESS,
+      metalness: accent ? 0.15 : 0.05,
+      clearcoat: accent ? 0.9 : 0.55,
+      clearcoatRoughness: 0.28,
+      // temper the room-env ceiling reflection so the accent stays vermilion at
+      // rest — the moving hot streak comes from the raking rim light instead
+      envMapIntensity: accent ? 0.55 : 1,
     });
-    const mesh = new THREE.Mesh(new THREE.BoxGeometry(w * s, h * s, MONO_DEPTH), mat);
+    const mesh = new THREE.Mesh(barGeometry(w * s, h * s), mat);
+    mesh.castShadow = true;
     mesh.position.x = (x + w / 2 - VB_W / 2) * s;
     mesh.position.y = -(y + h / 2 - VB_H / 2) * s;
     group.add(mesh);
-    bars.push(mesh);
-    barMats.push(mat);
+    bars.push({
+      mesh,
+      mat,
+      accent,
+      home: mesh.position.clone(),
+      homeQuat: new THREE.Quaternion(),
+      markHome: mesh.position.clone(),
+      baseColor: mat.color.clone(),
+      targetColor: mat.color.clone(),
+      baseEnv: mat.envMapIntensity,
+      targetEnv: mat.envMapIntensity,
+      targetScale: new THREE.Vector3(1, 1, 1),
+      kMul: accent ? ACCENT_K_MUL : 1,
+      dampMul: accent ? ACCENT_DAMP_MUL : 1,
+      mass: accent ? ACCENT_MASS : 1,
+      // slender-rod approximation: I ∝ (length² + depth²) / 12
+      invI: 12 / ((h * s) ** 2 + BAR_DEPTH ** 2),
+      vel: new THREE.Vector3(),
+      angVel: new THREE.Vector3(),
+      live: false,
+      launchAt: -1e9,
+      struck: false,
+      grabbed: false,
+      grip: null,
+    });
+    if (accent) accentMesh = mesh;
   }
-  group.position.y = MONO_Y;
-  return { group, bars, barMats, accent: barMats[2] };
+  if (!accentMesh) throw new Error('monogram: accent bar missing');
+  return { group, bars, accentMesh };
 }
 
-function makeCanvasPlane(worldW: number, pxW: number, pxH: number) {
-  const canvas = document.createElement('canvas');
-  canvas.width = pxW;
-  canvas.height = pxH;
-  const ctx = canvas.getContext('2d');
-  if (!ctx) throw new Error('2d canvas context unavailable');
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.colorSpace = THREE.SRGBColorSpace;
-  texture.anisotropy = 4;
-  const mesh = new THREE.Mesh(
-    new THREE.PlaneGeometry(worldW, (worldW * pxH) / pxW),
-    new THREE.MeshBasicMaterial({ map: texture, transparent: true }),
-  );
-  const paint = (draw: (c: Ctx2D) => void) => {
-    ctx.clearRect(0, 0, pxW, pxH);
-    draw(ctx);
-    texture.needsUpdate = true;
-  };
-  return { mesh, paint };
+/** Real cast shadows on an invisible floor — bars in flight throw moving
+    shadows, which is what makes them read as objects instead of CG sprites. */
+function makeShadowFloor(): { mesh: THREE.Mesh; mat: THREE.ShadowMaterial } {
+  const mat = new THREE.ShadowMaterial({ opacity: 0 });
+  const mesh = new THREE.Mesh(new THREE.PlaneGeometry(7, 7), mat);
+  mesh.rotation.x = -Math.PI / 2;
+  mesh.position.y = -0.95;
+  mesh.receiveShadow = true;
+  return { mesh, mat };
 }
 
-/** Angular button + recessed socket + a generous invisible tap target. */
-function build3DButton() {
-  const group = new THREE.Group();
-
-  const socket = new THREE.Group();
-  const floor = new THREE.Mesh(
-    new THREE.PlaneGeometry(BTN_W + SOCKET_M, BTN_H + SOCKET_M),
-    new THREE.MeshBasicMaterial({ color: SOCKET }),
-  );
-  const rim = rectOutline(BTN_W + SOCKET_M, BTN_H + SOCKET_M, CREAM);
-  rim.position.z = 0.002;
-  socket.add(floor, rim);
-
-  const geo = new THREE.BoxGeometry(BTN_W, BTN_H, BTN_DEPTH); // sharp: brand 90° edges
-  const solid = new THREE.Mesh(
-    geo,
-    new THREE.MeshStandardMaterial({
-      color: VERMILION,
-      roughness: 0.28,
-      metalness: 0.3,
-      emissive: VERMILION,
-      emissiveIntensity: 0,
-    }),
-  );
-
-  const edges = new THREE.LineSegments(
-    new THREE.EdgesGeometry(geo),
-    new THREE.LineBasicMaterial({ color: CREAM }),
-  );
-
-  const ring = rectOutline(BTN_W + 0.04, BTN_H + 0.04, VERMILION);
-  ring.visible = false;
-
-  const halo = rectOutline(BTN_W, BTN_H, VERMILION);
-  const haloMat = halo.material;
-  if (haloMat instanceof THREE.LineBasicMaterial) haloMat.transparent = true;
-  halo.visible = false;
-
-  const label = makeCanvasPlane(BTN_W * 0.9, 512, Math.round((512 * BTN_H) / BTN_W));
-  label.paint((c) => {
-    c.fillStyle = INK;
-    fitFont(c, CTA_LABEL, "'Instrument Serif', Georgia, serif", c.canvas.width * 0.84, 150);
-    c.textAlign = 'center';
-    c.textBaseline = 'middle';
-    c.fillText(CTA_LABEL, c.canvas.width / 2, c.canvas.height / 2 + 6);
-  });
-  label.mesh.position.z = BTN_DEPTH / 2 + 0.004;
-  solid.add(label.mesh);
-
-  // large invisible plane so the button is easy to tap even with wobble
-  const hit = new THREE.Mesh(
-    new THREE.PlaneGeometry(BTN_W * 1.5, BTN_H * 2),
-    new THREE.MeshBasicMaterial({ visible: false }),
-  );
-  hit.position.z = BTN_DEPTH / 2 + 0.01;
-  solid.add(hit);
-
-  group.add(socket, solid, edges, ring, halo);
-  group.position.set(0, BTN_Y, 0);
-  return { group, socket, solid, edges, ring, halo, hit };
-}
-
-function makeAssembly() {
-  const group = new THREE.Group();
-  const blocks: { mesh: THREE.Mesh; from: THREE.Vector3 }[] = [];
-  for (let i = 0; i < BLOCK_COUNT; i++) {
-    const mat = new THREE.MeshStandardMaterial({ color: CREAM, roughness: 0.5, transparent: true });
-    const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.04, 0.04), mat);
-    const a = (i / BLOCK_COUNT) * Math.PI * 2;
-    const from = new THREE.Vector3(Math.cos(a) * 0.18, Math.sin(a) * 0.12, 0.14 + (i % 3) * 0.05);
-    group.add(mesh);
-    blocks.push({ mesh, from });
-  }
-  group.position.z = BTN_LIFT;
-  group.visible = false;
-  return { group, blocks };
-}
-
-function makeSparks() {
-  const dirs: THREE.Vector3[] = [];
-  const speeds: number[] = [];
-  for (let i = 0; i < SPARK_COUNT; i++) {
-    const a = (i / SPARK_COUNT) * Math.PI * 2;
-    const tilt = ((i % 5) - 2) * 0.35;
-    dirs.push(new THREE.Vector3(Math.cos(a), Math.sin(a), tilt).normalize());
-    speeds.push(0.26 + (i % 7) * 0.03);
-  }
-  const positions = new Float32Array(SPARK_COUNT * 3);
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-  const mat = new THREE.PointsMaterial({
-    color: VERMILION,
-    size: 0.018,
-    transparent: true,
-    opacity: 0,
-    sizeAttenuation: true,
-    depthWrite: false,
-  });
-  const points = new THREE.Points(geo, mat);
-  const update = (age: number) => {
-    const t = age / BURST_MS;
-    if (t >= 1) {
-      mat.opacity = 0;
-      return;
-    }
-    const ease = 1 - (1 - t) ** 2;
-    for (let i = 0; i < SPARK_COUNT; i++) {
-      const d = dirs[i];
-      const r = speeds[i] * ease;
-      positions[i * 3] = d.x * r;
-      positions[i * 3 + 1] = d.y * r;
-      positions[i * 3 + 2] = d.z * r;
-    }
-    geo.attributes.position.needsUpdate = true;
-    mat.opacity = 1 - t;
-  };
-  return { points, update };
-}
-
-function makeAmbient() {
-  const positions = new Float32Array(AMBIENT_COUNT * 3);
-  for (let i = 0; i < AMBIENT_COUNT; i++) {
-    positions[i * 3] = (((i * 37) % 100) / 100 - 0.5) * 0.8;
-    positions[i * 3 + 1] = (((i * 53) % 100) / 100 - 0.5) * 0.7;
-    positions[i * 3 + 2] = (((i * 29) % 100) / 100) * 0.18 + 0.02;
-  }
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-  return new THREE.Points(
-    geo,
-    new THREE.PointsMaterial({
-      color: CREAM,
-      size: 0.005,
-      transparent: true,
-      opacity: 0.28,
-      sizeAttenuation: true,
-      depthWrite: false,
-    }),
-  );
-}
-
-const easeOutBack = (t: number) => {
-  const c1 = 1.70158;
-  const c3 = c1 + 1;
-  return 1 + c3 * (t - 1) ** 3 + c1 * (t - 1) ** 2;
+type Tilt = {
+  needsGesture: boolean;
+  enableTilt: () => Promise<boolean>;
+  /** Smoothed lean in [-1,1] per axis, or null while tilt is not active. */
+  getLean: () => { gamma: number; beta: number } | null;
+  dispose: () => void;
 };
-const clamp01 = (t: number) => Math.max(0, Math.min(1, t));
-const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 
-export async function start(container: HTMLElement): Promise<Handle> {
-  try {
-    await document.fonts.ready;
-  } catch {
-    /* fonts API optional; canvas falls back to system fonts */
-  }
-
-  const mindarThree = new MindARThree({
-    container,
-    imageTargetSrc: '/ar/card.mind',
-    uiScanning: 'no',
-    uiLoading: 'no',
-    uiError: 'no',
-    filterMinCF: FILTER_MIN_CF,
-    filterBeta: FILTER_BETA,
-    missTolerance: MISS_TOLERANCE,
-    warmupTolerance: WARMUP_TOLERANCE,
-  });
-  const { renderer, scene, camera } = mindarThree;
-  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
-
-  scene.add(new THREE.HemisphereLight(0xffffff, 0x333333, 1.2));
-  const key = new THREE.DirectionalLight(0xffffff, 1.6);
-  key.position.set(0.4, 0.8, 1);
-  scene.add(key);
-
-  const anchor = mindarThree.addAnchor(0);
-  const root = anchor.group; // MindAR poses this and toggles its visibility
-
-  root.add(makeOccluder());
-
-  const { group: monogram, bars, barMats, accent } = buildMonogram();
-  root.add(monogram);
-
-  const btn = build3DButton();
-  btn.group.visible = false;
-  root.add(btn.group);
-
-  const assembly = makeAssembly();
-  btn.group.add(assembly.group);
-
-  const sparks = makeSparks();
-  sparks.points.position.set(0, BTN_Y, BTN_LIFT);
-  sparks.points.visible = false;
-  root.add(sparks.points);
-
-  root.add(makeAmbient());
-
-  const caption = makeCanvasPlane(0.46, 640, 150);
-  caption.mesh.position.set(0, -0.31, 0.02);
-  caption.mesh.visible = false;
-  root.add(caption.mesh);
-
-  let found = false;
-  let clock = 0;
-  let last = 0;
-  let painted = -1;
-  let stepShownAt = 0;
-  let lastReveal = -1;
-  let complete = false;
-  let tappable = false; // true once the button has emerged (independent of story end)
-  let lastBurst = -BURST_EVERY_MS;
-  let pressing = 0;
-  const landAt = bars.map(() => -1);
-
-  anchor.onTargetFound = () => {
-    found = true;
-    last = performance.now();
+function createTilt(): Tilt {
+  let enabled = false;
+  let gamma = 0;
+  let beta = 0;
+  const onOrient = (e: DeviceOrientationEvent) => {
+    if (e.gamma == null || e.beta == null) return;
+    const g = THREE.MathUtils.clamp(e.gamma / 45, -1, 1); // left/right
+    const b = THREE.MathUtils.clamp((e.beta - 45) / 45, -1, 1); // front/back around upright
+    gamma = lerp(gamma, g, TILT_EMA);
+    beta = lerp(beta, b, TILT_EMA);
   };
-  anchor.onTargetLost = () => {
-    found = false;
+  const api: OrientationPermissionApi =
+    typeof DeviceOrientationEvent !== 'undefined'
+      ? // iOS-only static method, absent from the DOM lib typings — cast is unavoidable
+        (DeviceOrientationEvent as unknown as OrientationPermissionApi)
+      : {};
+  const needsGesture = typeof api.requestPermission === 'function';
+
+  const enableTilt = async (): Promise<boolean> => {
+    if (enabled) return true;
+    if (typeof DeviceOrientationEvent === 'undefined') return false;
+    if (needsGesture && api.requestPermission) {
+      try {
+        if ((await api.requestPermission()) !== 'granted') return false;
+      } catch {
+        return false;
+      }
+    }
+    window.addEventListener('deviceorientation', onOrient);
+    enabled = true;
+    return true;
   };
 
+  return {
+    needsGesture,
+    enableTilt,
+    getLean: () => (enabled ? { gamma, beta } : null),
+    dispose: () => window.removeEventListener('deviceorientation', onOrient),
+  };
+}
+
+type GrabControls = {
+  hasInteracted: () => boolean;
+  /** Advance whole-mark spin inertia; call once per frame with the frame dt. */
+  applySpinInertia: (dt: number) => void;
+  dispose: () => void;
+};
+
+/** Pointer input: grab a bar (drag it, throw it), spin the mark from empty
+    space (with inertia), double-tap to scatter. */
+function createGrabControls(
+  el: HTMLElement,
+  camera: THREE.Camera,
+  spinner: THREE.Object3D,
+  monogram: THREE.Object3D,
+  bars: BarSim[],
+  opts: {
+    canGrab: () => boolean;
+    canSpin: () => boolean;
+    onThrow: (accent: boolean) => void;
+    onDoubleTap: () => void;
+  },
+): GrabControls {
+  let interacted = false;
+  let spinDragging = false;
+  let activePointer: number | null = null; // first finger wins; others ignored
+  let grabbedBar: BarSim | null = null;
+  let lastX = 0;
+  let lastY = 0;
+  let downX = 0;
+  let downY = 0;
+  let downAt = 0;
+  let lastTapAt = -1e9;
+  let vX = 0;
+  let vY = 0;
+  const qx = new THREE.Quaternion();
+  const qy = new THREE.Quaternion();
+  const axisX = new THREE.Vector3(1, 0, 0);
+  const axisY = new THREE.Vector3(0, 1, 0);
   const raycaster = new THREE.Raycaster();
-  // Listen on window (capture) so a tap is never swallowed by MindAR's video /
-  // overlay sitting above the WebGL canvas — the recurring "button won't click".
-  const onTap = (e: PointerEvent) => {
-    if (!found || !tappable) return;
-    const rect = renderer.domElement.getBoundingClientRect();
-    const p = new THREE.Vector2(
+  const ndc = new THREE.Vector2();
+  const dragPlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
+  const hitPoint = new THREE.Vector3();
+
+  const spin = (dx: number, dy: number) => {
+    qy.setFromAxisAngle(axisY, dx);
+    qx.setFromAxisAngle(axisX, dy);
+    spinner.quaternion.premultiply(qy).premultiply(qx);
+  };
+  const capture = (fn: () => void) => {
+    try {
+      fn();
+    } catch {
+      /* pointer capture is best-effort; some engines throw on edge cases */
+    }
+  };
+  const setRay = (e: PointerEvent) => {
+    const rect = el.getBoundingClientRect();
+    ndc.set(
       ((e.clientX - rect.left) / rect.width) * 2 - 1,
       -((e.clientY - rect.top) / rect.height) * 2 + 1,
     );
-    raycaster.setFromCamera(p, camera);
-    if (raycaster.intersectObjects([btn.solid, btn.hit], true).length > 0) {
-      pressing = performance.now();
-      setTimeout(() => {
-        window.location.href = `mailto:${email}`;
-      }, 220);
+    raycaster.setFromCamera(ndc, camera);
+  };
+  /** Pointer ray → point on the z=0 world plane, in monogram-local space. */
+  const localPoint = (e: PointerEvent): THREE.Vector3 | null => {
+    setRay(e);
+    if (!raycaster.ray.intersectPlane(dragPlane, hitPoint)) return null;
+    return monogram.worldToLocal(hitPoint.clone());
+  };
+
+  const onDown = (e: PointerEvent) => {
+    if (activePointer !== null) return; // a second finger must not steal the grab
+    activePointer = e.pointerId;
+    interacted = true;
+    lastX = downX = e.clientX;
+    lastY = downY = e.clientY;
+    downAt = performance.now();
+    vX = vY = 0;
+    capture(() => el.setPointerCapture(e.pointerId));
+
+    if (opts.canGrab()) {
+      setRay(e);
+      const hits = raycaster.intersectObjects(
+        bars.map((b) => b.mesh),
+        false,
+      );
+      const mesh = hits[0]?.object;
+      const bar = mesh ? bars.find((b) => b.mesh === mesh) : undefined;
+      if (bar) {
+        const p = localPoint(e);
+        if (!p) return;
+        grabbedBar = bar;
+        bar.grabbed = true;
+        bar.live = true;
+        bar.vel.set(0, 0, 0);
+        // grip offset in the BAR's frame — grabbing an end makes it swing there
+        const offset = p
+          .clone()
+          .sub(bar.mesh.position)
+          .applyQuaternion(bar.mesh.quaternion.clone().invert());
+        bar.grip = { target: p.clone(), offset };
+        buzz(6);
+        return;
+      }
+    }
+    if (opts.canSpin()) spinDragging = true;
+  };
+
+  const onMove = (e: PointerEvent) => {
+    if (e.pointerId !== activePointer) return;
+    if (grabbedBar?.grip) {
+      const p = localPoint(e);
+      if (p) grabbedBar.grip.target.copy(p); // the loop integrates the swing
+      return;
+    }
+    if (!spinDragging) return;
+    const dx = (e.clientX - lastX) * DRAG_SENS;
+    const dy = (e.clientY - lastY) * DRAG_SENS;
+    spin(dx, dy);
+    vX = dx;
+    vY = dy;
+    lastX = e.clientX;
+    lastY = e.clientY;
+  };
+
+  const onUp = (e: PointerEvent) => {
+    if (e.pointerId !== activePointer) return;
+    activePointer = null;
+    capture(() => el.releasePointerCapture(e.pointerId));
+    const moved = Math.hypot(e.clientX - downX, e.clientY - downY);
+    const tap = isTap(moved, performance.now() - downAt, TAP_MOVE_PX, TAP_MS);
+
+    if (grabbedBar) {
+      const bar = grabbedBar;
+      grabbedBar = null;
+      bar.grabbed = false;
+      bar.grip = null;
+      if (tap) {
+        // a poke, not a throw — nudge it so it wobbles in place
+        bar.vel.set(0, 0, 1.2);
+        bar.angVel.set(0.6, 0.6, 0);
+      } else {
+        // the swing already gave it real velocity + spin — release as-is
+        opts.onThrow(bar.accent);
+      }
+    }
+    spinDragging = false;
+
+    if (tap) {
+      const now = performance.now();
+      if (now - lastTapAt < DOUBLE_TAP_MS) {
+        lastTapAt = -1e9;
+        opts.onDoubleTap();
+      } else {
+        lastTapAt = now;
+      }
+      vX = vY = 0;
     }
   };
-  window.addEventListener('pointerdown', onTap, true);
 
-  const paintCaption = (step: (typeof STEPS)[number], chars: number) =>
-    caption.paint((c) => {
-      c.textAlign = 'center';
-      c.fillStyle = VERMILION;
-      c.font = "40px 'JetBrains Mono', monospace";
-      c.textBaseline = 'top';
-      c.fillText(step.label.toUpperCase(), c.canvas.width / 2, 6);
-      c.fillStyle = CREAM;
-      fitFont(c, step.note, "'Instrument Serif', Georgia, serif", c.canvas.width * 0.94, 54);
-      c.fillText(step.note.slice(0, chars), c.canvas.width / 2, 70);
-    });
+  el.addEventListener('pointerdown', onDown);
+  el.addEventListener('pointermove', onMove);
+  el.addEventListener('pointerup', onUp);
+  el.addEventListener('pointercancel', onUp);
 
+  return {
+    hasInteracted: () => interacted,
+    applySpinInertia: (dt: number) => {
+      if (spinDragging || grabbedBar) return;
+      if (Math.abs(vX) < 1e-4 && Math.abs(vY) < 1e-4) return;
+      spin(vX, vY);
+      const decay = FRICTION ** (dt * 60); // frame-rate independent coast
+      vX *= decay;
+      vY *= decay;
+    },
+    dispose: () => {
+      el.removeEventListener('pointerdown', onDown);
+      el.removeEventListener('pointermove', onMove);
+      el.removeEventListener('pointerup', onUp);
+      el.removeEventListener('pointercancel', onUp);
+    },
+  };
+}
+
+/** One frame of a HELD bar — a small rigid body pinned to the finger by a
+    stiff spring at the GRIP POINT. The constraint force both drags the centre
+    and torques the bar (τ = r × F): grab an end and it hangs and swings; move
+    the finger in circles and it genuinely spins up. Release keeps the momentum. */
+function gripStep(bar: BarSim, dt: number) {
+  const grip = bar.grip;
+  if (!grip) return;
+  const { mesh, vel, angVel } = bar;
+  const worldOffset = grip.offset.clone().applyQuaternion(mesh.quaternion);
+  const gripPos = mesh.position.clone().add(worldOffset);
+  const force = grip.target.clone().sub(gripPos).multiplyScalar(GRIP_K);
+  vel.addScaledVector(force, dt / bar.mass);
+  // not gravity — homesickness: the bar strains back toward its slot, so you
+  // feel it resist the grip and lean home the moment you loosen up
+  vel.addScaledVector(bar.home.clone().sub(mesh.position), (HOME_PULL * dt) / bar.mass);
+  vel.multiplyScalar(Math.max(0, 1 - GRIP_LIN_DAMP * dt));
+  angVel.addScaledVector(
+    worldOffset.clone().cross(force),
+    (dt * bar.invI) / bar.mass,
+  );
+  angVel.multiplyScalar(Math.max(0, 1 - GRIP_ANG_DAMP * dt));
+  angVel.clampLength(0, ANGVEL_MAX);
+  mesh.position.addScaledVector(vel, dt);
+  if (mesh.position.length() > GRAB_RANGE) mesh.position.setLength(GRAB_RANGE);
+  const w = angVel.length();
+  if (w > 1e-5) {
+    const dq = new THREE.Quaternion().setFromAxisAngle(angVel.clone().divideScalar(w), w * dt);
+    mesh.quaternion.premultiply(dq).normalize();
+  }
+}
+
+/** Damped-spring step for one live bar; returns true the frame it seats home. */
+function stepBar(bar: BarSim, dt: number): boolean {
+  const { mesh, home, homeQuat, vel, angVel } = bar;
+  // position spring toward home
+  const acc = home.clone().sub(mesh.position).multiplyScalar(SPRING_K * bar.kMul);
+  acc.addScaledVector(vel, -SPRING_DAMP * bar.dampMul);
+  vel.addScaledVector(acc, dt);
+  mesh.position.addScaledVector(vel, dt);
+  // torque spring toward the target orientation
+  const qErr = mesh.quaternion.clone().multiply(homeQuat.clone().invert());
+  const angle = 2 * Math.acos(THREE.MathUtils.clamp(qErr.w, -1, 1));
+  if (angle > 1e-4) {
+    const s = Math.sqrt(Math.max(1e-12, 1 - qErr.w * qErr.w));
+    const axis = new THREE.Vector3(qErr.x / s, qErr.y / s, qErr.z / s);
+    const wrapped = angle > Math.PI ? angle - 2 * Math.PI : angle;
+    angVel.addScaledVector(axis, -wrapped * ROT_K * bar.kMul * dt);
+  }
+  angVel.multiplyScalar(Math.max(0, 1 - ROT_DAMP * bar.dampMul * dt));
+  const w = angVel.length();
+  if (w > 1e-5) {
+    const dq = new THREE.Quaternion().setFromAxisAngle(
+      angVel.clone().divideScalar(w),
+      w * dt,
+    );
+    mesh.quaternion.premultiply(dq).normalize();
+  }
+  // seated?
+  if (
+    mesh.position.distanceTo(home) < SEAT_POS_EPS &&
+    vel.length() < SEAT_VEL_EPS &&
+    angle < 0.04 &&
+    w < 0.12
+  ) {
+    mesh.position.copy(home);
+    mesh.quaternion.copy(homeQuat);
+    vel.set(0, 0, 0);
+    angVel.set(0, 0, 0);
+    bar.live = false;
+    return true;
+  }
+  return false;
+}
+
+/** Returns null when WebGL is unavailable so the caller can show a static fallback. */
+export function start(container: HTMLElement, opts: StartOpts = {}): Handle | null {
+  const reduce = opts.reduceMotion ?? matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  let renderer: THREE.WebGLRenderer;
+  try {
+    renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    if (!renderer.getContext()) return null;
+  } catch {
+    return null;
+  }
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  renderer.setClearColor(0x000000, 0);
+  renderer.toneMapping = THREE.ACESFilmicToneMapping; // rolls off the hot accent face
+  renderer.toneMappingExposure = 0.95;
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  const canvas = renderer.domElement;
+  canvas.style.width = '100%';
+  canvas.style.height = '100%';
+  canvas.style.display = 'block';
+  canvas.style.touchAction = 'none'; // we own the gesture
+  canvas.setAttribute('role', 'img');
+  if (opts.label) canvas.setAttribute('aria-label', opts.label);
+  container.appendChild(canvas);
+
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(35, 1, 0.1, 100);
+  camera.position.set(0, 0.05, DOLLY_FROM);
+  camera.lookAt(0, 0, 0);
+
+  // premium matte reflections from the bundled room env — no external HDRI asset
+  const pmrem = new THREE.PMREMGenerator(renderer);
+  const room = new RoomEnvironment();
+  const envRT = pmrem.fromScene(room, 0.04);
+  scene.environment = envRT.texture;
+  disposeTree(room); // throwaway meshes, rendered once into the PMREM target
+
+  // darker ambient: the mark is carved out of the ink by the moving lights
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x171512, 0.5));
+  const key = new THREE.DirectionalLight(0xffffff, 1.1);
+  key.position.set(0.9, 1.6, 1.1);
+  key.castShadow = true;
+  key.shadow.mapSize.set(1024, 1024);
+  key.shadow.camera.left = -2.2;
+  key.shadow.camera.right = 2.2;
+  key.shadow.camera.top = 2.2;
+  key.shadow.camera.bottom = -2.2;
+  key.shadow.camera.near = 0.1;
+  key.shadow.camera.far = 8;
+  key.shadow.radius = 6; // soft penumbra
+  key.shadow.bias = -0.0005;
+  scene.add(key);
+  // vermilion rim light — its position is driven by device tilt to rake the accent bar
+  const rim = new THREE.DirectionalLight(0xff5a3c, 1.6);
+  rim.position.set(0, 0.3, 1.4);
+  scene.add(rim);
+
+  // pivot (tilt/idle lean) → spinner (user drag + inertia) → monogram
+  const pivot = new THREE.Group();
+  const spinner = new THREE.Group();
+  pivot.add(spinner);
+  scene.add(pivot);
+
+  const { group: monogram, bars } = buildMonogram();
+  spinner.add(monogram);
+
+  const shadow = makeShadowFloor();
+  scene.add(shadow.mesh);
+
+  const riseStart = reduce ? -1e9 : performance.now() + RISE_DELAY; // -inf ⇒ seated
+  let riseDone = reduce;
+  const riseSpan = RISE_MS + BARS.length * RISE_STAGGER;
+  let attempts = 0; // throws + scatters — attempts to break it, not bars seated
+  let mode: SceneMode = 'mark';
+  let pendingMode: SceneMode | null = null;
+  let scatterCount = 0; // double-taps so far; the FINALE_AT-th one earns the button
+  let accentThrown = false;
+  let shakeAt = -1e9; // defiant head-shake timestamp (rage response)
+  let timeScale = 1; // finale slow-motion: drops to ~0.25, eases back to 1
+  let flashAt = -1e9; // coronation light flash timestamp
+  let impactAt = -1e9; // last forge strike (camera kick + light spike)
+  let absorbed = 0; // cream bars forged into the button so far
+  let lastShake = -1e9;
+  let ctaHover = false;
+  let hoverGlow = 0; // smoothed 0..1 hover state driving the lift + light
+  let forgeQueue: BarSim[] = []; // strike order — each launches when the previous lands
+  // per-strike growth tween: fixed-length easeOutBack, immune to frame rate
+  let growStart = -1e9;
+  const growFrom = new THREE.Vector3(1, 1, 1);
+  const growTo = new THREE.Vector3(1, 1, 1);
+  const throwTimes: number[] = [];
+
+  // the finale formation: THE OPINION BECOMES THE BUTTON. The vermilion bar
+  // turns 90° and stretches into the button face; the other four visibly tuck
+  // into a neat depth-stack behind it, swallowed by the thing they built.
+  const zRot = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), Math.PI / 2);
+  const BUTTON_SLOTS: { pos: THREE.Vector3; quat: THREE.Quaternion; scale: THREE.Vector3 }[] = [
+    // shorts + tall → hide in a tidy stack behind the face, front to back
+    { pos: new THREE.Vector3(0, 0.05, -0.46), quat: zRot.clone(), scale: new THREE.Vector3(1, 1, 0.9) },
+    { pos: new THREE.Vector3(0, 0, -0.32), quat: zRot.clone(), scale: new THREE.Vector3(0.9, 0.92, 0.9) },
+    // the accent IS the button: widened cross-section, deeper body
+    { pos: new THREE.Vector3(0, 0, 0), quat: zRot.clone(), scale: new THREE.Vector3(2.3, 1, 1.5) },
+    { pos: new THREE.Vector3(0, -0.05, -0.46), quat: zRot.clone(), scale: new THREE.Vector3(1, 1, 0.9) },
+    { pos: new THREE.Vector3(0, 0, -0.6), quat: zRot.clone(), scale: new THREE.Vector3(1, 1, 0.9) },
+  ];
+  // deeper than the token — the white key/hemisphere lights lift it back up to
+  // brand vermilion on screen (targeting #ff5a3c directly renders salmon)
+  const vermilion = new THREE.Color('#d13a1e');
+
+  const BTN_SCALE_FROM = new THREE.Vector3(1.15, 1, 1.1); // pre-forge button size…
+  const BTN_SCALE_TO = BUTTON_SLOTS[2].scale.clone(); // …grows a step per strike
+
+  const setTargets = (m: SceneMode) => {
+    for (let i = 0; i < bars.length; i++) {
+      const bar = bars[i];
+      if (m === 'button') {
+        bar.home.copy(BUTTON_SLOTS[i].pos);
+        bar.homeQuat.copy(BUTTON_SLOTS[i].quat);
+        // only the accent deepens (stays saturated under the white lights);
+        // the hidden four keep their cream — they're visibly tucked away, not dyed
+        if (bar.accent) {
+          bar.targetColor.copy(vermilion);
+          bar.targetEnv = 0.3;
+          // starts small — each forge strike grows it toward BTN_SCALE_TO
+          bar.targetScale.copy(BTN_SCALE_FROM);
+        } else {
+          bar.targetScale.copy(BUTTON_SLOTS[i].scale);
+        }
+      } else {
+        bar.home.copy(bar.markHome);
+        bar.homeQuat.identity();
+        bar.targetColor.copy(bar.baseColor);
+        bar.targetEnv = bar.baseEnv;
+        bar.targetScale.set(1, 1, 1);
+      }
+    }
+  };
+
+  // desktop has no gyro — the pointer position stands in for the tilt
+  let mouseX = 0;
+  let mouseY = 0;
+  let mouseSeen = false;
+  const onMouse = (e: PointerEvent) => {
+    if (e.pointerType !== 'mouse') return;
+    mouseSeen = true;
+    mouseX = (e.clientX / innerWidth) * 2 - 1;
+    mouseY = (e.clientY / innerHeight) * 2 - 1;
+  };
+  window.addEventListener('pointermove', onMouse);
+
+  const blast = () => {
+    for (const bar of bars) {
+      if (bar.grabbed) continue;
+      const dir = bar.markHome
+        .clone()
+        .setZ(0)
+        .normalize()
+        .multiplyScalar(SCATTER_SPEED * (0.75 + Math.random() * 0.5));
+      dir.z = 0.8 + Math.random() * 1.2; // pop toward the viewer
+      bar.vel.copy(dir);
+      bar.angVel.set(
+        (Math.random() - 0.5) * 6,
+        (Math.random() - 0.5) * 6,
+        (Math.random() - 0.5) * 6,
+      );
+      bar.live = true;
+    }
+  };
+
+  const scatter = () => {
+    if (!riseDone) return;
+    attempts += 1;
+    scatterCount += 1;
+    const now = performance.now();
+    for (const bar of bars) bar.launchAt = now; // default: springs engage at once
+    if (mode === 'button') {
+      // once the button exists, double-tap toggles the two shapes
+      pendingMode = 'mark';
+      setTargets('mark');
+    } else if (scatterCount >= FINALE_AT) {
+      // the tenth attempt earns the button — slow the world, then FORGE it:
+      // the accent forms the face first, the cream bars strike it one by one
+      pendingMode = 'button';
+      absorbed = 0;
+      setTargets('button');
+      if (!reduce) {
+        timeScale = 0.25;
+        // strike chain: only the first cream bar launches now — each next one
+        // waits until the previous strike has landed and grown the button
+        forgeQueue = bars.filter((b) => !b.accent);
+        forgeQueue.forEach((b, i) => {
+          b.struck = false;
+          b.launchAt = i === 0 ? now + FORGE_DELAY : Number.POSITIVE_INFINITY;
+        });
+      }
+    }
+    blast();
+    buzz([18, 30, 18, 30, 28]);
+    opts.onScatter?.(scatterCount);
+  };
+
+  // shake the phone = scatter. devicemotion is permission-free where we attach
+  // it (Android/desktop); iOS gates it behind a prompt, so it simply stays off.
+  const onMotion = (e: DeviceMotionEvent) => {
+    const a = e.acceleration;
+    if (!a || a.x == null || a.y == null || a.z == null) return;
+    if (Math.hypot(a.x, a.y, a.z) < SHAKE_THRESHOLD) return;
+    const now = performance.now();
+    if (now - lastShake < SHAKE_DEBOUNCE_MS) return;
+    lastShake = now;
+    scatter();
+  };
+  const motionGated =
+    typeof DeviceMotionEvent !== 'undefined' &&
+    typeof (DeviceMotionEvent as unknown as OrientationPermissionApi).requestPermission ===
+      'function';
+  if (typeof DeviceMotionEvent !== 'undefined' && !motionGated) {
+    window.addEventListener('devicemotion', onMotion);
+  }
+  /** iOS gates motion + orientation behind one system prompt; called from the
+      first user gesture it unlocks tilt light, spill and shake in one go. */
+  const enableMotionAndTilt = async (): Promise<boolean> => {
+    const ok = await tilt.enableTilt();
+    if (motionGated) {
+      try {
+        // same static-method shape as DeviceOrientationEvent — cast unavoidable
+        const api = DeviceMotionEvent as unknown as OrientationPermissionApi;
+        if ((await api.requestPermission?.()) === 'granted') {
+          window.addEventListener('devicemotion', onMotion);
+        }
+      } catch {
+        /* denied — shake stays off, everything else keeps working */
+      }
+    }
+    return ok;
+  };
+
+  const controls = createGrabControls(canvas, camera, spinner, monogram, bars, {
+    // the button is a button — no grabbing, no spinning; the mark is the toy
+    canGrab: () => riseDone && mode !== 'button' && pendingMode !== 'button',
+    canSpin: () => mode === 'mark' && pendingMode !== 'button',
+    onThrow: (accent) => {
+      attempts += 1;
+      buzz(10);
+      if (accent && !accentThrown) {
+        accentThrown = true;
+        opts.onAccentThrow?.();
+      }
+      // rapid-fire throws → the mark shakes its head at you
+      const now = performance.now();
+      throwTimes.push(now);
+      while (throwTimes.length && now - throwTimes[0] > RAGE_WINDOW_MS) throwTimes.shift();
+      if (throwTimes.length >= RAGE_N) {
+        throwTimes.length = 0;
+        shakeAt = now;
+        buzz([12, 40, 12]);
+        opts.onRage?.();
+      }
+    },
+    onDoubleTap: scatter,
+  });
+  const tilt = createTilt();
+  if (!tilt.needsGesture) void tilt.enableTilt(); // non-iOS fires without a prompt
+
+  const resize = () => {
+    const w = container.clientWidth || 1;
+    const h = container.clientHeight || 1;
+    renderer.setSize(w, h, false);
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+  };
+  resize();
+  const ro = new ResizeObserver(resize);
+  ro.observe(container);
+
+  let lastFrame = performance.now();
   renderer.setAnimationLoop(() => {
     const now = performance.now();
-    if (found) clock += now - last;
-    last = now;
+    const dt = Math.min(1 / 30, (now - lastFrame) / 1000); // clamp tab-switch jumps
+    lastFrame = now;
 
-    const bob = Math.sin(((now / 1000) * HOVER_HZ) * Math.PI * 2) * HOVER_AMP;
+    const buttonish = mode === 'button' || pendingMode === 'button';
 
-    // --- monogram bars rise UP through the card surface (occluder hides the
-    //     sub-surface part), flashing as they clear ---
-    for (let i = 0; i < bars.length; i++) {
-      const r = clamp01((clock - i * BAR_STAGGER_MS) / RISE_MS);
-      const e = easeOutBack(r);
-      // centre travels from fully sunk (top at surface) to sitting on the card
-      bars[i].position.z = lerp(-MONO_DEPTH / 2, MONO_DEPTH / 2, e) + bob * r;
-      if (r >= 1 && landAt[i] < 0) landAt[i] = clock;
-      barMats[i].emissiveIntensity = landAt[i] < 0 ? 0 : clamp01(1 - (clock - landAt[i]) / 320) * 0.9;
+    // lean ratio in [-1,1] per axis, by priority: gyro (phone) > mouse (desktop)
+    // > slow idle auto-lean; drives the pivot, the rim light AND loose-bar gravity.
+    // The button always keeps a slow idle sway so its depth stays visible.
+    let leanY = 0;
+    let leanX = 0;
+    const lean = tilt.getLean();
+    if (lean) {
+      leanY = lean.gamma;
+      leanX = -lean.beta;
+    } else if (mouseSeen) {
+      leanY = mouseX * MOUSE_GAIN;
+      leanX = -mouseY * MOUSE_GAIN * 0.5;
+    } else if (!reduce && (!controls.hasInteracted() || buttonish)) {
+      const phase = (now / 1000) * IDLE_HZ * Math.PI * 2;
+      leanY = Math.sin(phase) * IDLE_AMP;
+      leanX = Math.cos(phase) * IDLE_AMP * 0.4;
+    }
+    // gyro fan: tilting fans the seated bars apart in depth and turns their
+    // faces slightly into the light — the mark reads as loosely stacked slats
+    // breathing with the hand. Subtle by design; springs own anything loose.
+    if (riseDone && mode === 'mark' && !pendingMode) {
+      for (let i = 0; i < bars.length; i++) {
+        const bar = bars[i];
+        if (bar.live || bar.grabbed) continue;
+        const f = (i - 2) / 2; // -1..1 across the mark, accent at the pivot
+        bar.mesh.position.set(
+          bar.home.x + leanY * FAN_SHIFT * f * 0.4,
+          bar.home.y,
+          bar.home.z + leanY * FAN_SHIFT * f * 2,
+        );
+        bar.mesh.rotation.set(leanX * FAN_ROT * 0.35, leanY * FAN_ROT, 0);
+      }
     }
 
-    const stageF = (clock - RISE_MS) / STEP_MS;
-    const step = Math.floor(stageF);
-    const shown = Math.min(STEPS.length - 1, Math.max(0, step));
-    complete = step >= STEPS.length - 1;
-    const active = clock >= RISE_MS;
-
-    btn.group.visible = active;
-    caption.mesh.visible = active;
-
-    if (active) {
-      if (shown !== painted) {
-        painted = shown;
-        stepShownAt = clock;
-        lastReveal = -1;
+    if (!riseDone) {
+      // rise: each bar thickens + lifts toward the viewer, overshooting as it seats
+      let allUp = true;
+      for (let i = 0; i < bars.length; i++) {
+        const t = clamp01((now - riseStart - i * RISE_STAGGER) / RISE_MS);
+        const e = easeOutBack(t);
+        bars[i].mesh.scale.z = Math.max(0.02, lerp(0.02, 1, e));
+        bars[i].mesh.position.z = lerp(-0.3, 0, e);
+        if (t < 1) allUp = false;
       }
-      const note = STEPS[shown].note;
-      const reveal = Math.min(note.length, Math.floor((clock - stepShownAt) / TYPE_MS));
-      if (reveal !== lastReveal) {
-        lastReveal = reveal;
-        paintCaption(STEPS[shown], reveal);
+      if (allUp) {
+        riseDone = true;
+        for (const b of bars) {
+          b.mesh.scale.z = 1;
+          b.mesh.position.copy(b.home);
+        }
       }
-
-      // blocks gather (step 1); solid rises out of the socket (step 2+)
-      const emerge = step >= 2 ? clamp01(stageF - 2) : 0;
-      btn.solid.visible = step >= 2;
-      btn.edges.visible = step < 2;
-      btn.ring.visible = step >= 3;
-      btn.ring.position.z = BTN_LIFT;
-      tappable = step >= 2 && emerge > 0.8; // clickable as soon as it's up
-
-      const press = pressing ? Math.max(0, 1 - (now - pressing) / 220) : 0;
-      // centre travels from inside the hole up to hover height
-      const z = lerp(-BTN_DEPTH / 2, BTN_LIFT, easeOutBack(emerge)) + bob * (emerge > 0 ? 1 : 0);
-      btn.solid.position.z = z - press * (BTN_LIFT + BTN_DEPTH / 2);
-
-      const conv = clamp01(stageF - 1);
-      const solidFull = step >= 2 && emerge > 0.85;
-      assembly.group.visible = (step === 1 || step === 2) && !solidFull;
-      for (const { mesh, from } of assembly.blocks) {
-        const spread = 1 - conv;
-        mesh.position.set(from.x * spread, from.y * spread, from.z * spread);
-        const sc = step >= 2 ? 1 - emerge : 0.25 + 0.75 * conv;
-        mesh.scale.setScalar(Math.max(0.001, sc));
-        const bmat = mesh.material;
-        if (bmat instanceof THREE.MeshStandardMaterial) bmat.opacity = step >= 2 ? 1 - emerge : 1;
+    } else {
+      // finale slow-motion eases back to real time — quickly, it's a punch
+      // of drama, not a slog (the first strike must land near real speed)
+      timeScale = lerp(timeScale, 1, Math.min(1, dt * 1.6));
+      const dtSim = dt * timeScale;
+      // bar physics: held bars swing on the grip; loose live bars chase home
+      const buttonForge = pendingMode === 'button';
+      for (const bar of bars) {
+        if (bar.grabbed) {
+          gripStep(bar, dtSim);
+          continue;
+        }
+        if (!bar.live) continue;
+        // phone tilt (or the mouse) is gravity for anything loose — it slides
+        bar.vel.x += leanY * TILT_GRAV * dtSim;
+        bar.vel.y += leanX * TILT_GRAV * dtSim;
+        if (now < bar.launchAt) {
+          // forge suspense: hang scattered, coasting, until this bar's strike
+          bar.vel.multiplyScalar(Math.max(0, 1 - 1.6 * dtSim));
+          bar.mesh.position.addScaledVector(bar.vel, dtSim);
+          continue;
+        }
+        // a forge strike fires on CONTACT (proximity), not on the perfect
+        // seat — the button grows the moment the bar visibly hits it
+        if (
+          buttonForge &&
+          !bar.accent &&
+          !bar.struck &&
+          bar.mesh.position.distanceTo(bar.home) < 0.16
+        ) {
+          bar.struck = true;
+          absorbed += 1;
+          impactAt = now;
+          buzz(26);
+          const accent = bars[2];
+          growFrom.copy(accent.mesh.scale);
+          growTo.lerpVectors(BTN_SCALE_FROM, BTN_SCALE_TO, absorbed / 4);
+          accent.targetScale.copy(growTo);
+          growStart = now;
+          const next = forgeQueue[absorbed];
+          if (next) next.launchAt = now + FORGE_GAP; // release the next striker
+        }
+        if (stepBar(bar, dtSim)) {
+          buzz(8); // clicked home
+          const allHome = bars.every((b) => !b.live);
+          if (allHome && pendingMode) {
+            mode = pendingMode;
+            pendingMode = null;
+            if (mode === 'button' && !reduce) flashAt = now; // coronation surge
+            opts.onMode?.(mode);
+          }
+          opts.onSettle?.(attempts, allHome);
+        }
       }
-
-      const smat = btn.solid.material;
-      if (smat instanceof THREE.MeshStandardMaterial) {
-        smat.emissiveIntensity = complete ? 0.5 + 0.35 * Math.sin(now / 280) : 0;
-      }
-      if (complete) accent.emissiveIntensity = 0.5 + 0.4 * Math.sin(now / 280);
-
-      if (complete) {
-        if (clock - lastBurst >= BURST_EVERY_MS) lastBurst = clock;
-        const age = clock - lastBurst;
-        sparks.points.visible = true;
-        sparks.update(age);
-        const ht = clamp01(age / (BURST_MS * 0.8));
-        btn.halo.visible = ht < 1;
-        btn.halo.position.z = BTN_LIFT;
-        btn.halo.scale.setScalar(1 + ht * 1.6);
-        const hmat = btn.halo.material;
-        if (hmat instanceof THREE.LineBasicMaterial) hmat.opacity = 1 - ht;
+      // finale morph: colour, reflections and shape tween while the bars fly —
+      // on REAL time, so each strike pumps the button up even during slow-mo
+      const cl = Math.min(1, COLOR_LERP * dt);
+      const growT = (now - growStart) / GROW_MS;
+      for (const bar of bars) {
+        if (!bar.mat.color.equals(bar.targetColor)) bar.mat.color.lerp(bar.targetColor, cl);
+        bar.mat.envMapIntensity = lerp(bar.mat.envMapIntensity, bar.targetEnv, cl);
+        if (bar.accent && growT <= 1) {
+          // the strike tween owns the button's scale while it runs
+          bar.mesh.scale.lerpVectors(growFrom, growTo, easeOutBack(clamp01(growT)));
+        } else {
+          bar.mesh.scale.lerp(bar.targetScale, cl);
+        }
       }
     }
+    const risen = clamp01((now - riseStart) / riseSpan);
+    shadow.mat.opacity = risen * 0.38;
+    // slow push-in + a punch toward the button on every forge strike
+    const kick = FORGE_KICK * Math.exp(-(now - impactAt) / 140);
+    camera.position.z = lerp(DOLLY_FROM, DOLLY_TO, easeOutCubic(risen)) - kick;
+
+    controls.applySpinInertia(dt);
+
+    // button mode: unwind any user spin so the slab faces the camera dead-on
+    if (buttonish) spinner.quaternion.slerp(IDENTITY_Q, Math.min(1, 2.5 * dt));
+
+    // the button leans gently — enough to keep reading as a 3D object
+    const leanScale = buttonish ? 0.45 : 1;
+    pivot.rotation.y = leanY * TILT_GAIN * leanScale;
+    pivot.rotation.x = leanX * TILT_GAIN * leanScale;
+    // defiant head-shake after rapid-fire throws — a decaying roll wiggle
+    const shakeAge = now - shakeAt;
+    pivot.rotation.z =
+      shakeAge < 900 ? Math.sin(shakeAge / 45) * 0.055 * Math.exp(-shakeAge / 260) : 0;
+    rim.position.x = leanY * LIGHT_RAKE;
+    rim.position.y = 0.3 + leanX * 0.8;
+    // hover: the button face rises toward the viewer and the light leans in
+    hoverGlow = lerp(hoverGlow, ctaHover && mode === 'button' ? 1 : 0, Math.min(1, 10 * dt));
+    const accentBar = bars[2];
+    if (mode === 'button' && !accentBar.live && !accentBar.grabbed) {
+      accentBar.mesh.position.z = accentBar.home.z + hoverGlow * HOVER_LIFT;
+    }
+
+    // coronation flash (long surge when the button completes) + a sharp spike
+    // per forge strike + the hover glow
+    const flashAge = now - flashAt;
+    const surge = flashAge < 2400 ? 4.2 * Math.sin(Math.min(1, flashAge / 2400) * Math.PI) : 0;
+    const spike = FORGE_SPIKE * Math.exp(-(now - impactAt) / 160);
+    rim.intensity = 1.6 + surge + spike + hoverGlow * HOVER_GLOW;
 
     renderer.render(scene, camera);
   });
 
-  await mindarThree.start(); // prompts for camera
-
-  // MindAR computes the cover-size once at start; if the container wasn't fully
-  // laid out yet the video letterboxes. Kick a resize once things settle so it
-  // recomputes against the real full-screen dimensions.
-  const kickResize = () => window.dispatchEvent(new Event('resize'));
-  requestAnimationFrame(kickResize);
-  for (const t of [250, 800, 1500]) setTimeout(kickResize, t);
-
   return {
+    enableTilt: enableMotionAndTilt,
+    needsTiltGesture: tilt.needsGesture,
+    setCtaHover: (hover: boolean) => {
+      ctaHover = hover;
+    },
     stop: () => {
       renderer.setAnimationLoop(null);
-      window.removeEventListener('pointerdown', onTap, true);
-      mindarThree.stop();
-      const video = container.querySelector('video');
-      const stream = video && video.srcObject instanceof MediaStream ? video.srcObject : null;
-      stream?.getTracks().forEach((track) => track.stop());
+      controls.dispose();
+      tilt.dispose();
+      window.removeEventListener('pointermove', onMouse);
+      window.removeEventListener('devicemotion', onMotion);
+      ro.disconnect();
+      for (const b of bars) {
+        b.mesh.geometry.dispose();
+        b.mat.dispose();
+      }
+      shadow.mesh.geometry.dispose();
+      shadow.mat.dispose();
+      envRT.dispose();
+      pmrem.dispose();
+      renderer.dispose();
+      canvas.remove();
     },
   };
 }
