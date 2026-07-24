@@ -623,25 +623,18 @@ export function start(container: HTMLElement, opts: StartOpts = {}): Handle | nu
   let flashAt = -1e9; // finale light flash timestamp
   const throwTimes: number[] = [];
 
-  // the finale formation: the five bars turn 90° and become one clean slab —
-  // "a button, built the way I build platforms", literally. Three exact rows
-  // form the face (short bars stretch to full width); the remaining two pack
-  // behind as the body so it reads as ONE machined button, not stacked bars.
-  const s = MONO_WIDTH / VB_W;
-  const rowH = 25 * s; // every bar is 25 units wide in the SVG
-  const faceW = 168 * s; // tall-bar length = the button's width
-  const stretch = 168 / 79; // short bars (79) stretch to the tall length
+  // the finale formation: THE OPINION BECOMES THE BUTTON. The vermilion bar
+  // turns 90° and stretches into the button face; the other four visibly tuck
+  // into a neat depth-stack behind it, swallowed by the thing they built.
   const zRot = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), Math.PI / 2);
   const BUTTON_SLOTS: { pos: THREE.Vector3; quat: THREE.Quaternion; scale: THREE.Vector3 }[] = [
-    // short → top face row, stretched full width
-    { pos: new THREE.Vector3(0, rowH, 0), quat: zRot.clone(), scale: new THREE.Vector3(1, stretch, 1) },
-    // tall → middle face row
-    { pos: new THREE.Vector3(0, 0, 0), quat: zRot.clone(), scale: new THREE.Vector3(1, 1, 1) },
-    // tall accent → bottom face row (the opinion carries the baseline)
-    { pos: new THREE.Vector3(0, -rowH, 0), quat: zRot.clone(), scale: new THREE.Vector3(1, 1, 1) },
-    // shorts → the body, packed behind the face
-    { pos: new THREE.Vector3(-faceW / 4, 0, -BAR_DEPTH), quat: zRot.clone(), scale: new THREE.Vector3(1.4, 1, 1) },
-    { pos: new THREE.Vector3(faceW / 4, 0, -BAR_DEPTH), quat: zRot.clone(), scale: new THREE.Vector3(1.4, 1, 1) },
+    // shorts + tall → hide in a tidy stack behind the face, front to back
+    { pos: new THREE.Vector3(0, 0.05, -0.46), quat: zRot.clone(), scale: new THREE.Vector3(1, 1, 0.9) },
+    { pos: new THREE.Vector3(0, 0, -0.32), quat: zRot.clone(), scale: new THREE.Vector3(0.9, 0.92, 0.9) },
+    // the accent IS the button: widened cross-section, deeper body
+    { pos: new THREE.Vector3(0, 0, 0), quat: zRot.clone(), scale: new THREE.Vector3(2.3, 1, 1.5) },
+    { pos: new THREE.Vector3(0, -0.05, -0.46), quat: zRot.clone(), scale: new THREE.Vector3(1, 1, 0.9) },
+    { pos: new THREE.Vector3(0, 0, -0.6), quat: zRot.clone(), scale: new THREE.Vector3(1, 1, 0.9) },
   ];
   // deeper than the token — the white key/hemisphere lights lift it back up to
   // brand vermilion on screen (targeting #ff5a3c directly renders salmon)
@@ -653,8 +646,12 @@ export function start(container: HTMLElement, opts: StartOpts = {}): Handle | nu
       if (m === 'button') {
         bar.home.copy(BUTTON_SLOTS[i].pos);
         bar.homeQuat.copy(BUTTON_SLOTS[i].quat);
-        bar.targetColor.copy(vermilion);
-        bar.targetEnv = 0.3; // keep the slab saturated vermilion, not salmon
+        // only the accent deepens (stays saturated under the white lights);
+        // the hidden four keep their cream — they're visibly tucked away, not dyed
+        if (bar.accent) {
+          bar.targetColor.copy(vermilion);
+          bar.targetEnv = 0.3;
+        }
         bar.targetScale.copy(BUTTON_SLOTS[i].scale);
       } else {
         bar.home.copy(bar.markHome);
