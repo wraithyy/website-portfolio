@@ -110,6 +110,9 @@ const fontPreloads =
     <slot />
     <script>
       import { email, github } from '../data/site';
+      import { register as registerWebMcp } from '../scripts/webmcp';
+
+      registerWebMcp();
 
       /* Console art — the JK monogram (see Logo.astro), third bar in accent.
          Left/right of the accent bar per row; row 4 is the gap in the K. */
