@@ -1,5 +1,5 @@
 ---
-import { email } from '../data/site';
+import { email, game } from '../data/site';
 import { storySteps } from '../data/story';
 import { type Lang, useTranslations } from '../i18n/ui';
 
@@ -143,6 +143,15 @@ const t = useTranslations(lang);
 
   <div id="story-bridge" class="border-t border-hairline py-16 text-center">
     <p class="font-display text-title text-balance">{t('story.bridge')}</p>
+    <!-- The Unbuilt: the same portfolio as a first-person puzzle game (separate repo) -->
+    <a
+      href={game}
+      target="_blank"
+      rel="noopener"
+      class="label-mono mt-6 inline-block text-muted transition-colors hover:text-accent"
+    >
+      {t('story.unbuilt')} <span aria-hidden="true">↗</span>
+    </a>
   </div>
 </div>
 

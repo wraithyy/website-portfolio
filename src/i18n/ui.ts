@@ -26,6 +26,7 @@ export const ui = {
     'story.facts':
       'React & TypeScript · 10+ years · Liberec, CZ',
     'story.bridge': 'Platforms are the same six steps, at scale.',
+    'story.unbuilt': 'This portfolio, as a puzzle game: The Unbuilt',
     'story.btnSketch': 'btn / primary',
     'story.btnReal': 'Say hello',
     'story.skip': 'skip',
@@ -87,6 +88,7 @@ export const ui = {
     'story.facts':
       'React & TypeScript · 10+ let · Liberec, CZ',
     'story.bridge': 'Platformy jsou těch samých šest kroků, jen ve větším.',
+    'story.unbuilt': 'Tohle portfolio jako logická hra: The Unbuilt',
     'story.btnSketch': 'btn / primary',
     'story.btnReal': 'Ozvěte se',
     'story.skip': 'přeskočit',
