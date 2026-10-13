@@ -32,7 +32,7 @@ const itemCount = String(items.length).padStart(2, '0');
     {
       items.map((item, i) => (
         <a href={item.href} class="label-mono text-muted transition-colors hover:text-accent">
-          <span class="num text-accent" aria-hidden="true">{num(i)}</span>
+          <span class="num" aria-hidden="true">{num(i)}</span>
           {t(item.key)}
         </a>
       ))
@@ -86,7 +86,7 @@ const itemCount = String(items.length).padStart(2, '0');
       {
         items.map((item, i) => (
           <a href={item.href} class="label-mono text-muted transition-colors hover:text-accent">
-            <span class="num text-accent" aria-hidden="true">{num(i)}</span>
+            <span class="num" aria-hidden="true">{num(i)}</span>
             {t(item.key)}
           </a>
         ))
@@ -309,6 +309,8 @@ const itemCount = String(items.length).padStart(2, '0');
     try {
       localStorage.setItem('theme', next);
     } catch {}
+    const paper = getComputedStyle(document.documentElement).getPropertyValue('--paper').trim();
+    document.querySelectorAll('meta[name="theme-color"]').forEach((m) => m.setAttribute('content', paper));
     syncPressed();
   };
   toggles.forEach((el) =>

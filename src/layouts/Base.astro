@@ -87,6 +87,13 @@ const fontPreloads =
               ? 'dark'
               : 'light';
         document.documentElement.dataset.theme = theme;
+        // the media-keyed theme-color metas only know the OS scheme; a stored
+        // manual choice must win in the browser chrome too
+        if (stored) {
+          document.querySelectorAll('meta[name="theme-color"]').forEach((m) => {
+            m.setAttribute('content', theme === 'dark' ? '#121110' : '#faf8f4');
+          });
+        }
       })();
     </script>
     {
@@ -125,7 +132,7 @@ const fontPreloads =
         ...left.flatMap(() => [mono, accent, mono]),
       );
       console.log(
-        `%c0 errors, 0 warnings, 1 hidden message. You found it.\n\nLet's talk → ${email}\nReceipts   → ${github}\n\nP.S. you read consoles for fun — you'll want this: ↑ ↑ ↓ ↓ ← → ← → B A`,
+        `%c0 errors, 0 warnings, 1 hidden message. You found it.\n\nLet's talk → ${email}\nReceipts   → ${github}\n\nP.S. you read consoles for fun, so you'll want this: ↑ ↑ ↓ ↓ ← → ← → B A`,
         mono,
       );
 

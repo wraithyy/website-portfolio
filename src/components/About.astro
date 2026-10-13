@@ -25,32 +25,32 @@ const stackGroups: Array<{ label: Record<Lang, string>; items: string }> = [
 
 const employers: Array<{ years: Record<Lang, string>; name: string; role: Record<Lang, string> }> = [
   {
-    years: { en: '2021 — now', cs: '2021 — teď' },
+    years: { en: '2021-now', cs: '2021-teď' },
     name: 'Trask',
     role: {
-      en: 'senior frontend developer → architect & team lead — banking, energy, insurance',
-      cs: 'senior frontend vývojář → architekt & team lead — bankovnictví, energetika, pojišťovnictví',
+      en: 'senior frontend developer → architect & team lead in banking, insurance, energy, automotive',
+      cs: 'senior frontend vývojář → architekt & team lead: bankovnictví, pojišťovnictví, energetika, automotive',
     },
   },
   {
-    years: { en: '2019 — 21', cs: '2019 — 21' },
+    years: { en: '2019-21', cs: '2019-21' },
     name: 'Lundegaard',
     role: {
-      en: 'JavaScript developer — React & Angular on large corporate applications',
-      cs: 'JavaScript vývojář — React a Angular na velkých korporátních aplikacích',
+      en: 'JavaScript developer: React & Angular on large corporate applications',
+      cs: 'JavaScript vývojář: React a Angular na velkých korporátních aplikacích',
     },
   },
   {
-    years: { en: '2018 — 19', cs: '2018 — 19' },
+    years: { en: '2018-19', cs: '2018-19' },
     name: 'Trask',
-    role: { en: 'JavaScript developer — Angular, JSP, a bit of Java', cs: 'JavaScript vývojář — Angular, JSP, občas Java' },
+    role: { en: 'JavaScript developer: Angular, JSP, a bit of Java', cs: 'JavaScript vývojář: Angular, JSP, občas Java' },
   },
   {
-    years: { en: '2015 — 17', cs: '2015 — 17' },
+    years: { en: '2015-17', cs: '2015-17' },
     name: 'C26.cz',
     role: {
-      en: 'programmer — PHP, C, jQuery, and my first clients',
-      cs: 'programátor — PHP, C, jQuery a první klienti',
+      en: 'programmer: PHP, C, jQuery, and my first clients',
+      cs: 'programátor: PHP, C, jQuery a první klienti',
     },
   },
 ];
@@ -59,8 +59,7 @@ const employers: Array<{ years: Record<Lang, string>; name: string; role: Record
 <section id="about" class="mx-auto max-w-6xl scroll-mt-20 px-(--spacing-gutter) py-(--spacing-section)">
   <div class="grid gap-10 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
     <div>
-      <p class="label-mono text-accent">{t('about.label')}</p>
-      <h2 class="mt-4 font-display text-title text-balance">{t('about.title')}</h2>
+      <h2 class="font-display text-title text-balance">{t('about.title')}</h2>
     </div>
     <div>
       <p class="max-w-xl text-lg leading-relaxed text-muted">{t('about.bio')}</p>

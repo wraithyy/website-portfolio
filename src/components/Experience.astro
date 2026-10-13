@@ -11,8 +11,7 @@ const t = useTranslations(lang);
 ---
 
 <section id="experience" class="mx-auto max-w-6xl scroll-mt-20 px-(--spacing-gutter) py-(--spacing-section)">
-  <p class="label-mono text-accent">{t('exp.label')}</p>
-  <h2 class="mt-4 font-display text-title">{t('exp.title')}</h2>
+  <h2 class="font-display text-title">{t('exp.title')}</h2>
 
   <ol class="mt-12 border-t border-hairline">
     {
@@ -23,7 +22,7 @@ const t = useTranslations(lang);
           </span>
           <h3 class="font-display text-title text-balance">{item.title[lang]}</h3>
           <p class="max-w-xl pt-2 font-mono text-sm leading-relaxed text-muted lg:pt-3">
-            <span class="label-mono text-accent">{t('exp.proof')} — </span>
+            <span class="label-mono text-accent">{t('exp.proof')}: </span>
             {item.proof[lang]}
           </p>
         </li>

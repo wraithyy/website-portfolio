@@ -12,17 +12,17 @@ export interface StoryStep {
 
 export const storySteps: StoryStep[] = [
   {
-    label: { en: '01 — Architecture', cs: '01 — Architektura' },
+    label: { en: '01 Architecture', cs: '01 Architektura' },
     title: { en: 'I draw the boundary first.', cs: 'Nejdřív nakreslím hranici.' },
     onButton: { en: 'one component, one clear job', cs: 'jedna komponenta, jeden jasný úkol' },
     onPlatform: {
       en: 'one domain, one clear owner',
       cs: 'jedna doména, jeden jasný vlastník',
     },
-    note: { en: 'fig. 01 — wireframe, no fill', cs: 'obr. 01 — wireframe, bez výplně' },
+    note: { en: 'fig. 01: wireframe, no fill', cs: 'obr. 01: wireframe, bez výplně' },
   },
   {
-    label: { en: '02 — TypeScript', cs: '02 — TypeScript' },
+    label: { en: '02 TypeScript', cs: '02 TypeScript' },
     title: { en: 'Then I type how it communicates.', cs: 'Pak otypuju, jak komunikuje.' },
     onButton: {
       en: 'typed props between component and caller',
@@ -32,36 +32,36 @@ export const storySteps: StoryStep[] = [
       en: 'typed interfaces between teams',
       cs: 'typovaná rozhraní mezi týmy',
     },
-    note: { en: 'fig. 02 — interface attached', cs: 'obr. 02 — rozhraní připojeno' },
+    note: { en: 'fig. 02: interface attached', cs: 'obr. 02: rozhraní připojeno' },
   },
   {
-    label: { en: '03 — Components', cs: '03 — Komponenty' },
+    label: { en: '03 Components', cs: '03 Komponenty' },
     title: { en: 'Every state is a decision.', cs: 'Každý stav je rozhodnutí.' },
     onButton: {
-      en: 'hover, pressed, disabled — each decided once',
-      cs: 'hover, pressed, disabled — o každém rozhodnuto jednou',
+      en: 'hover, pressed, disabled: each decided once',
+      cs: 'hover, pressed, disabled: o každém rozhodnuto jednou',
     },
     onPlatform: {
-      en: 'buttons, forms, patterns — each decided once, for every team',
-      cs: 'tlačítka, formuláře, vzory — o každém rozhodnuto jednou, pro všechny týmy',
+      en: 'buttons, forms, patterns: each decided once, for every team',
+      cs: 'tlačítka, formuláře, vzory: o každém rozhodnuto jednou, pro všechny týmy',
     },
-    note: { en: 'fig. 03 — state: hover, 400ms ease', cs: 'obr. 03 — stav: hover, 400 ms ease' },
+    note: { en: 'fig. 03: hover state, 400ms ease', cs: 'obr. 03: stav hover, 400 ms ease' },
   },
   {
-    label: { en: '04 — Accessibility', cs: '04 — Přístupnost' },
+    label: { en: '04 Accessibility', cs: '04 Přístupnost' },
     title: { en: 'It works without a mouse.', cs: 'Funguje i bez myši.' },
     onButton: {
       en: 'one focus ring, one 44px target',
       cs: 'jeden focus ring, jeden 44px target',
     },
     onPlatform: {
-      en: 'the same bar on every screen — WCAG 2.1 AA',
-      cs: 'stejná laťka na každé obrazovce — WCAG 2.1 AA',
+      en: 'the same bar on every screen: WCAG 2.1 AA',
+      cs: 'stejná laťka na každé obrazovce: WCAG 2.1 AA',
     },
-    note: { en: 'fig. 04 — focus visible, 44px targets', cs: 'obr. 04 — focus viditelný, cíle 44 px' },
+    note: { en: 'fig. 04: focus visible, 44px targets', cs: 'obr. 04: focus viditelný, cíle 44 px' },
   },
   {
-    label: { en: '05 — Review & AI leverage', cs: '05 — Review & AI' },
+    label: { en: '05 Review & AI leverage', cs: '05 Review & AI' },
     title: { en: 'Then every line has to prove itself.', cs: 'Pak se každý řádek musí obhájit.' },
     onButton: { en: 'one diff: reviewed, tested, signed', cs: 'jeden diff: review, testy, podpis' },
     onPlatform: {
@@ -69,18 +69,18 @@ export const storySteps: StoryStep[] = [
       cs: 'každý diff desítek vývojářů: stejná laťka',
     },
     note: {
-      en: 'fig. 05 — renders ✓ keyboard ✓ contrast ✓',
-      cs: 'obr. 05 — renders ✓ klávesnice ✓ kontrast ✓',
+      en: 'fig. 05: renders ✓ keyboard ✓ contrast ✓',
+      cs: 'obr. 05: renders ✓ klávesnice ✓ kontrast ✓',
     },
   },
   {
-    label: { en: '06 — Delivery', cs: '06 — Dodávka' },
+    label: { en: '06 Delivery', cs: '06 Dodávka' },
     title: { en: 'Shipped. Both of them.', cs: 'Nasazeno. Obojí.' },
-    onButton: { en: 'live in production — press it', cs: 'naživo v produkci — zmáčkněte si ho' },
+    onButton: { en: 'live in production, press it', cs: 'naživo v produkci, zmáčkněte si ho' },
     onPlatform: {
       en: 'live for banks, insurers and utilities',
       cs: 'naživo pro banky, pojišťovny a energetiku',
     },
-    note: { en: 'fig. 06 — shipped. press it.', cs: 'obr. 06 — nasazeno. zmáčkněte.' },
+    note: { en: 'fig. 06: shipped. press it.', cs: 'obr. 06: nasazeno. zmáčkněte.' },
   },
 ];

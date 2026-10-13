@@ -4,6 +4,7 @@
 
 /* Runtime theme variables — switched by [data-theme] */
 :root {
+  color-scheme: light;
   --paper: #faf8f4;
   --ink: #1a1815;
   --muted: #6b6660;
@@ -13,6 +14,7 @@
 }
 
 [data-theme='dark'] {
+  color-scheme: dark;
   --paper: #121110;
   --ink: #e8e4dc;
   --muted: #918c84;
