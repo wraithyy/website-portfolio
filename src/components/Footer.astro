@@ -13,4 +13,6 @@ const year = new Date().getFullYear();
 <footer class="mx-auto flex max-w-6xl flex-wrap items-baseline justify-between gap-4 px-(--spacing-gutter) pt-8 pb-10">
   <p class="label-mono text-muted">© {year} Josef Kvapil</p>
   <p class="label-mono text-muted">{t('footer.colophon')}</p>
+  <!-- GDPR art. 13 notice: the beacon sends the visitor's IP to Cloudflare -->
+  <p class="label-mono w-full text-muted">{t('footer.privacy')}</p>
 </footer>

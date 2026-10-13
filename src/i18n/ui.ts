@@ -51,6 +51,7 @@ export const ui = {
     'contact.meta': 'open to new engagements · remote or hybrid · Liberec / Prague · CZ / EN',
     'contact.ctaLabel': 'btn / your-project',
     'footer.colophon': 'Set in Instrument Serif, Public Sans & JetBrains Mono. Built with Astro.',
+    'footer.privacy': 'Analytics: Cloudflare Web Analytics, no cookies, no fingerprinting.',
 
     'ar.role': 'Frontend architect · Liberec',
     'ar.hint': 'Grab a bar and throw it',
@@ -112,6 +113,7 @@ export const ui = {
     'contact.meta': 'otevřený novým projektům · remote i hybrid · Liberec / Praha · CZ / EN',
     'contact.ctaLabel': 'btn / váš-projekt',
     'footer.colophon': 'Vysazeno písmy Instrument Serif, Public Sans a JetBrains Mono. Postaveno na Astru.',
+    'footer.privacy': 'Analytika: Cloudflare Web Analytics, bez cookies a bez fingerprintingu.',
 
     'ar.role': 'Frontend architekt · Liberec',
     'ar.hint': 'Chyť trámek a hoď s ním',
